@@ -3,11 +3,13 @@
   "configurations": {
     "ristinolla": {
       "appLocation": "./",
-      "api_location":	".api",
+      "api_location": ".api",
       "outputLocation": "public/build",
       "appBuildCommand": "npm run build",
       "run": "npm run dev",
-      "appDevserverUrl": "http://localhost:8080"
+      "appDevserverUrl": "http://localhost:8080",
+      "appName": "ristinolla",
+      "resourceGroupName": "ristinolla-rg"
     }
   }
 }
