@@ -150,7 +150,7 @@
 		border-radius: 0px;
 		padding: 1vh;
 		border-color: #000;
-		border-width: 6px;
+		border-width: 10px;
 	}
 	legend {
     	background-color: #0000;
