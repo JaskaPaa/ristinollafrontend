@@ -16,7 +16,7 @@
     let winnerLine = [];
     let lastMove = {x: 0, y: 0};
     let visible = false;
-    let humanPlaysFirstMove = true;
+    let humanPlaysFirstMove = false;
     let line = [0, 0, 0, 0];
     let switchXO = false;
     
@@ -96,7 +96,7 @@
         winner = '';
         humanPlaysFirstMove = (humanPlaysFirstMove) ? false : true;
 
-        console.log("bSize: " + bSize);
+        //console.log("bSize: " + bSize);
 
         if (humanPlaysFirstMove === false) {
             let move = AI.playMove(squares.slice());        
