@@ -1,9 +1,9 @@
 <script>
 
 	//import Square from './Square.svelte';
+	import { onMount } from "svelte";
 	import Game from './Game.svelte';
 	import { gameBackground, gameLineColor, vw, vh } from './stores.js';
-	
 
 	let win = '';
 	let boardSize = 18;

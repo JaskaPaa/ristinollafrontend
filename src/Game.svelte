@@ -7,6 +7,7 @@
     import { beforeUpdate, afterUpdate } from 'svelte';
     import { vw } from './stores.js';
     import { gameBackground, gameLineColor, gameMarkColor } from './stores.js';
+import App from "./App.svelte";
     //export let move = {x: -1, y: -1};
 
     export let winner = '';
@@ -73,9 +74,46 @@
         playAI();
         //background = "#251";    
     }
+    
+    async function testNode() {
+        let str = "";
+        squares.forEach(r => r.forEach(s => str+=s));
+        console.log(str.length);
+        console.log(...squares[0]);
+
+        fetch("http://localhost:3001/api/position/" + str)
+            .then(response => response.json())
+            .then(data => {
+                console.log(data);
+            }).catch(error => {
+                console.log(error);
+                return [];
+            });
+        
+    };
+
+    async function doPost () {
+		
+        fetch('http://localhost:3001/api/position/', {
+			method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+			body: JSON.stringify({
+				    foo: "bar"
+			    })
+		    })
+            .then(response => response.json())
+            .then(result => console.log(result))           
+
+    }
 
     function playAI() {
         console.log("AI plays...");
+        
+        testNode();
+        doPost();
+
         if (winner !== '')
             return; // game over
         let move = AI.playMove(squares.slice());        
