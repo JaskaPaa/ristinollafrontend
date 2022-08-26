@@ -149,6 +149,7 @@
                 console.log(error);
                 alert("Ei yhteyttä palvelimeen");
             });
+            
     }
 
     function doMove(move) {
