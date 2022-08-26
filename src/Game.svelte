@@ -12,7 +12,6 @@
 
     //const axios = require('axios').default;
     import axios from "axios";
-
     
     export let winner = '';
     export let bSize = 15;
@@ -79,7 +78,7 @@
             return;
         }
         
-        playAI();
+        playAI('O');
         //background = "#251";    
     }
     
@@ -126,49 +125,46 @@
 
     }
 
-    function doPost () {
-
-        /*fetch('http://localhost:3001/api/position/', {
-			method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-			body: JSON.stringify({
-				    squares: squares.slice()
-			    })
-		    })
-            .then(response => response.json())
-            .then(result => doMove(JSON.parse(result)))
-            .catch((error) => {
-                console.error('Error:', error);
-            });*/           
+    function doPost (inTurn = 'X') {        
         
-        axios.post('http://localhost:3001/api/position/', { squares: squares.slice() } )
+        let urlA = 'https://ristinollabackend.herokuapp.com/api/position/';
+        let urlB = 'http://localhost:3001/api/position/';
+
+        axios.post( urlB, { squares: squares.slice(), nextMove: inTurn } )
             .then( response =>  doMove(JSON.parse(response.data)) )
             .catch(function (error) {
                 console.log(error);
                 alert("Ei yhteyttä palvelimeen");
             });
-            
+
     }
+
+    let count = 0;
 
     function doMove(move) {
         console.log(move.x + ", " + move.y)
-        squares[move.x][move.y] = 'O';
+        squares[move.x][move.y] = move.mark;
         lastMove = {x: move.x, y: move.y};
-        winnerLine = AI.checkFive(move.x, move.y, squares);
-        console.log("winnerLine: " + winnerLine);
+        winnerLine = AI.checkFive(move.x, move.y, squares);        
+        
+        if (winnerLine.length > 0)
+            return;
         
         console.log("Tasuri? " + AI.checkDraw(squares));
-        if (AI.checkDraw(squares))
-            winner = "Tasapeli";  
+        if (AI.checkDraw(squares)) {
+            winner = "Tasapeli";
+            return;
+        }
+        count++;
+        
+        doPost((move.mark === 'X') ? 'O' : 'X');
     }
 
-    function playAI() {
+    function playAI(inTurn) {
         console.log("AI plays...");
         
         //testNode();
-        doPost();
+        doPost(inTurn);
         //testMove = doGet();
 
         /*console.log('Move: ' + testMove);

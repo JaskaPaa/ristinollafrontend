@@ -3455,19 +3455,19 @@ var app = (function () {
 
     function get_each_context(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[27] = list[i];
-    	child_ctx[29] = i;
+    	child_ctx[28] = list[i];
+    	child_ctx[30] = i;
     	return child_ctx;
     }
 
     function get_each_context_1(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[30] = list[i];
-    	child_ctx[32] = i;
+    	child_ctx[31] = list[i];
+    	child_ctx[33] = i;
     	return child_ctx;
     }
 
-    // (220:4) {#if winner === 'X' || winner === 'O'}
+    // (217:4) {#if winner === 'X' || winner === 'O'}
     function create_if_block(ctx) {
     	let svg;
     	let line_1;
@@ -3491,7 +3491,7 @@ var app = (function () {
     			attr_dev(animate, "attributeName", "stroke");
     			attr_dev(animate, "dur", "0.5s");
     			attr_dev(animate, "repeatCount", "5");
-    			add_location(animate, file$1, 224, 12, 7439);
+    			add_location(animate, file$1, 221, 12, 7289);
     			attr_dev(line_1, "class", "path--");
     			attr_dev(line_1, "x1", line_1_x__value = /*line*/ ctx[4][0]);
     			attr_dev(line_1, "y1", line_1_y__value = /*line*/ ctx[4][1]);
@@ -3501,11 +3501,11 @@ var app = (function () {
     			attr_dev(line_1, "opacity", "0.6");
     			attr_dev(line_1, "stroke-width", line_1_stroke_width_value = /*squareSize*/ ctx[6] / 3);
     			attr_dev(line_1, "stroke-linecap", "round");
-    			add_location(line_1, file$1, 221, 8, 7223);
+    			add_location(line_1, file$1, 218, 8, 7073);
     			attr_dev(svg, "height", svg_height_value = /*bSize*/ ctx[0] * /*squareSize*/ ctx[6]);
     			attr_dev(svg, "width", svg_width_value = /*bSize*/ ctx[0] * /*squareSize*/ ctx[6]);
     			attr_dev(svg, "class", "svelte-1ag8sq8");
-    			add_location(svg, file$1, 220, 4, 7153);
+    			add_location(svg, file$1, 217, 4, 7003);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, svg, anchor);
@@ -3558,29 +3558,29 @@ var app = (function () {
     		block,
     		id: create_if_block.name,
     		type: "if",
-    		source: "(220:4) {#if winner === 'X' || winner === 'O'}",
+    		source: "(217:4) {#if winner === 'X' || winner === 'O'}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (235:2) {#each row as square, j}
+    // (232:2) {#each row as square, j}
     function create_each_block_1(ctx) {
     	let square;
     	let current;
 
     	function func() {
-    		return /*func*/ ctx[17](/*i*/ ctx[29], /*j*/ ctx[32]);
+    		return /*func*/ ctx[17](/*i*/ ctx[30], /*j*/ ctx[33]);
     	}
 
     	square = new Square({
     			props: {
     				onClick: func,
-    				text: /*squares*/ ctx[2][/*i*/ ctx[29]][/*j*/ ctx[32]] === '-'
+    				text: /*squares*/ ctx[2][/*i*/ ctx[30]][/*j*/ ctx[33]] === '-'
     				? ''
-    				: /*changeXO*/ ctx[12](/*squares*/ ctx[2][/*i*/ ctx[29]][/*j*/ ctx[32]]),
-    				anim: /*i*/ ctx[29] == /*lastMove*/ ctx[3].x && /*j*/ ctx[32] == /*lastMove*/ ctx[3].y && /*visible*/ ctx[7]
+    				: /*changeXO*/ ctx[12](/*squares*/ ctx[2][/*i*/ ctx[30]][/*j*/ ctx[33]]),
+    				anim: /*i*/ ctx[30] == /*lastMove*/ ctx[3].x && /*j*/ ctx[33] == /*lastMove*/ ctx[3].y && /*visible*/ ctx[7]
     				? true
     				: false,
     				size: /*squareSize*/ ctx[6]
@@ -3600,11 +3600,11 @@ var app = (function () {
     			ctx = new_ctx;
     			const square_changes = {};
 
-    			if (dirty[0] & /*squares*/ 4) square_changes.text = /*squares*/ ctx[2][/*i*/ ctx[29]][/*j*/ ctx[32]] === '-'
+    			if (dirty[0] & /*squares*/ 4) square_changes.text = /*squares*/ ctx[2][/*i*/ ctx[30]][/*j*/ ctx[33]] === '-'
     			? ''
-    			: /*changeXO*/ ctx[12](/*squares*/ ctx[2][/*i*/ ctx[29]][/*j*/ ctx[32]]);
+    			: /*changeXO*/ ctx[12](/*squares*/ ctx[2][/*i*/ ctx[30]][/*j*/ ctx[33]]);
 
-    			if (dirty[0] & /*lastMove, visible*/ 136) square_changes.anim = /*i*/ ctx[29] == /*lastMove*/ ctx[3].x && /*j*/ ctx[32] == /*lastMove*/ ctx[3].y && /*visible*/ ctx[7]
+    			if (dirty[0] & /*lastMove, visible*/ 136) square_changes.anim = /*i*/ ctx[30] == /*lastMove*/ ctx[3].x && /*j*/ ctx[33] == /*lastMove*/ ctx[3].y && /*visible*/ ctx[7]
     			? true
     			: false;
 
@@ -3629,18 +3629,18 @@ var app = (function () {
     		block,
     		id: create_each_block_1.name,
     		type: "each",
-    		source: "(235:2) {#each row as square, j}",
+    		source: "(232:2) {#each row as square, j}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (233:4) {#each squares as row, i}
+    // (230:4) {#each squares as row, i}
     function create_each_block(ctx) {
     	let div;
     	let current;
-    	let each_value_1 = /*row*/ ctx[27];
+    	let each_value_1 = /*row*/ ctx[28];
     	validate_each_argument(each_value_1);
     	let each_blocks = [];
 
@@ -3661,7 +3661,7 @@ var app = (function () {
     			}
 
     			attr_dev(div, "class", "board-row svelte-1ag8sq8");
-    			add_location(div, file$1, 233, 2, 7985);
+    			add_location(div, file$1, 230, 2, 7835);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -3674,7 +3674,7 @@ var app = (function () {
     		},
     		p: function update(ctx, dirty) {
     			if (dirty[0] & /*markMove, squares, changeXO, lastMove, visible, squareSize*/ 6348) {
-    				each_value_1 = /*row*/ ctx[27];
+    				each_value_1 = /*row*/ ctx[28];
     				validate_each_argument(each_value_1);
     				let i;
 
@@ -3729,7 +3729,7 @@ var app = (function () {
     		block,
     		id: create_each_block.name,
     		type: "each",
-    		source: "(233:4) {#each squares as row, i}",
+    		source: "(230:4) {#each squares as row, i}",
     		ctx
     	});
 
@@ -3792,7 +3792,7 @@ var app = (function () {
     			set_style(div, "background-color", /*$gameBackground*/ ctx[9]);
     			set_style(div, "width", /*bSize*/ ctx[0] * /*squareSize*/ ctx[6] + 39 + "px");
     			set_style(div, "border-color", /*borderColor*/ ctx[8]);
-    			add_location(div, file$1, 218, 0, 6976);
+    			add_location(div, file$1, 215, 0, 6826);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -3964,7 +3964,7 @@ var app = (function () {
     			return;
     		}
 
-    		playAI();
+    		playAI('O');
     	} //background = "#251";    
 
     	async function testNode() {
@@ -4002,42 +4002,42 @@ var app = (function () {
     		});
     	}
 
-    	function doPost() {
-    		/*fetch('http://localhost:3001/api/position/', {
-    			method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-    			body: JSON.stringify({
-    				    squares: squares.slice()
-    			    })
-    		    })
-        .then(response => response.json())
-        .then(result => doMove(JSON.parse(result)))
-        .catch((error) => {
-            console.error('Error:', error);
-        });*/
-    		axios.post('http://localhost:3001/api/position/', { squares: squares.slice() }).then(response => doMove(JSON.parse(response.data))).catch(function (error) {
+    	function doPost(inTurn = 'X') {
+    		let urlB = 'http://localhost:3001/api/position/';
+
+    		axios.post(urlB, {
+    			squares: squares.slice(),
+    			nextMove: inTurn
+    		}).then(response => doMove(JSON.parse(response.data))).catch(function (error) {
     			console.log(error);
     			alert("Ei yhteyttä palvelimeen");
     		});
     	}
 
+    	let count = 0;
+
     	function doMove(move) {
     		console.log(move.x + ", " + move.y);
-    		$$invalidate(2, squares[move.x][move.y] = 'O', squares);
+    		$$invalidate(2, squares[move.x][move.y] = move.mark, squares);
     		$$invalidate(3, lastMove = { x: move.x, y: move.y });
     		$$invalidate(15, winnerLine = checkFive(move.x, move.y, squares));
-    		console.log("winnerLine: " + winnerLine);
+    		if (winnerLine.length > 0) return;
     		console.log("Tasuri? " + checkDraw(squares));
-    		if (checkDraw(squares)) $$invalidate(1, winner = "Tasapeli");
+
+    		if (checkDraw(squares)) {
+    			$$invalidate(1, winner = "Tasapeli");
+    			return;
+    		}
+
+    		count++;
+    		doPost(move.mark === 'X' ? 'O' : 'X');
     	}
 
-    	function playAI() {
+    	function playAI(inTurn) {
     		console.log("AI plays...");
 
     		//testNode();
-    		doPost();
+    		doPost(inTurn);
     	} //testMove = doGet();
     	/*console.log('Move: ' + testMove);
 
@@ -4132,6 +4132,7 @@ var app = (function () {
     		testNode,
     		doGet,
     		doPost,
+    		count,
     		doMove,
     		playAI,
     		newGame,
@@ -4156,6 +4157,7 @@ var app = (function () {
     		if ('borderColor' in $$props) $$invalidate(8, borderColor = $$props.borderColor);
     		if ('resizedSize' in $$props) $$invalidate(5, resizedSize = $$props.resizedSize);
     		if ('testMove' in $$props) $$invalidate(16, testMove = $$props.testMove);
+    		if ('count' in $$props) count = $$props.count;
     		if ('squareSize' in $$props) $$invalidate(6, squareSize = $$props.squareSize);
     	};
 
