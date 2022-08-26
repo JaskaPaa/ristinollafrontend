@@ -7,9 +7,13 @@
     import { beforeUpdate, afterUpdate } from 'svelte';
     import { vw } from './stores.js';
     import { gameBackground, gameLineColor, gameMarkColor } from './stores.js';
-import App from "./App.svelte";
+    import App from "./App.svelte";
     //export let move = {x: -1, y: -1};
 
+    //const axios = require('axios').default;
+    import axios from "axios";
+
+    
     export let winner = '';
     export let bSize = 15;
 
@@ -28,6 +32,10 @@ import App from "./App.svelte";
     gameLineColor.subscribe(value => {borderColor = value});
 
     let resizedSize = 620;
+
+    let testMove = {x: 0, y: 0};
+
+    $: console.log(`Changed testMove: ${testMove.x}, ${testMove.y}`); 
 
     $: console.log("Resized: " + resizedSize + " " + squareSize +" "+ Math.floor(resizedSize/bSize)%2 ); 
 
@@ -92,27 +100,77 @@ import App from "./App.svelte";
         
     };
 
-    async function doPost () {
-		
-        fetch('http://localhost:3001/api/position/', {
+    function doGet() {
+        let str = "";
+        squares.forEach(r => r.forEach(s => str+=s));
+        console.log(str.length);
+        console.log(...squares[0]);
+
+        let urlA = 'https://ristinollabackend.herokuapp.com/api/position/';
+        let urlB = 'http://localhost:3001/api/position/';
+
+        axios.get(urlB + str)
+            .then(function (response) {
+                // handle success
+                console.log(response);
+                console.log(response.data.move);
+                testMove = response.data.move;
+            })
+            .catch(function (error) {
+                // handle error
+                console.log(error);
+            })
+            .then(function () {
+                console.log("Aina vaaaaan...");
+            });
+
+    }
+
+    function doPost () {
+
+        /*fetch('http://localhost:3001/api/position/', {
 			method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
 			body: JSON.stringify({
-				    foo: "bar"
+				    squares: squares.slice()
 			    })
 		    })
             .then(response => response.json())
-            .then(result => console.log(result))           
+            .then(result => doMove(JSON.parse(result)))
+            .catch((error) => {
+                console.error('Error:', error);
+            });*/           
+        
+        axios.post('http://localhost:3001/api/position/', { squares: squares.slice() } )
+            .then( response =>  doMove(JSON.parse(response.data)) )
+            .catch(function (error) {
+                console.log(error);
+                alert("Ei yhteyttä palvelimeen");
+            });
+    }
 
+    function doMove(move) {
+        console.log(move.x + ", " + move.y)
+        squares[move.x][move.y] = 'O';
+        lastMove = {x: move.x, y: move.y};
+        winnerLine = AI.checkFive(move.x, move.y, squares);
+        console.log("winnerLine: " + winnerLine);
+        
+        console.log("Tasuri? " + AI.checkDraw(squares));
+        if (AI.checkDraw(squares))
+            winner = "Tasapeli";  
     }
 
     function playAI() {
         console.log("AI plays...");
         
-        testNode();
+        //testNode();
         doPost();
+        //testMove = doGet();
+
+        /*console.log('Move: ' + testMove);
 
         if (winner !== '')
             return; // game over
@@ -124,7 +182,7 @@ import App from "./App.svelte";
         
         console.log("Tasuri? " + AI.checkDraw(squares));
         if (AI.checkDraw(squares))
-            winner = "Tasapeli";        
+            winner = "Tasapeli";*/        
     }
 
     export function newGame(size=15) {
