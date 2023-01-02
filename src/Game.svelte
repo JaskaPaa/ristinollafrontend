@@ -1,4 +1,4 @@
-<script>
+<script lang=ts>
 
     import * as AI from "./AI.js";
 	import Square from './Square.svelte';
@@ -59,7 +59,7 @@
 
     }
 
-    function markMove(x, y) {
+    function markMove(x: number, y: number) {
         if (winner !== '')
             return; // game over
         if (squares[x][y] !== '-')
@@ -164,10 +164,10 @@
         console.log("AI plays...");
         
         //testNode();
-        doPost(inTurn);
+        // doPost(inTurn);
         //testMove = doGet();
 
-        /*console.log('Move: ' + testMove);
+        //console.log('Move: ' + testMove);
 
         if (winner !== '')
             return; // game over
@@ -179,7 +179,7 @@
         
         console.log("Tasuri? " + AI.checkDraw(squares));
         if (AI.checkDraw(squares))
-            winner = "Tasapeli";*/        
+            winner = "Tasapeli";   
     }
 
     export function newGame(size=15) {

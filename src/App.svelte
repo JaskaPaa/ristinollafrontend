@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 
 	//import Square from './Square.svelte';
 	import { onMount } from "svelte";

@@ -1,6 +1,3 @@
-<!--
-article: https://raygun.io/blog/2014/07/making-svg-html-burger-button/
--->
 
 <script>
 
@@ -28,6 +25,9 @@ article: https://raygun.io/blog/2014/07/making-svg-html-burger-button/
 
 </script>
 
+<!--
+article: https://raygun.io/blog/2014/07/making-svg-html-burger-button/
+-->
 
 <div id="hamburger" class="hamburglar is-open" on:click={burgerTime}>
 

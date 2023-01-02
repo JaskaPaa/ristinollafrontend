@@ -4,7 +4,6 @@ var app = (function () {
     'use strict';
 
     function noop() { }
-    const identity = x => x;
     function add_location(element, file, line, column, char) {
         element.__svelte_meta = {
             loc: { file, line, column, char }
@@ -50,7 +49,9 @@ var app = (function () {
         target.insertBefore(node, anchor || null);
     }
     function detach(node) {
-        node.parentNode.removeChild(node);
+        if (node.parentNode) {
+            node.parentNode.removeChild(node);
+        }
     }
     function destroy_each(iterations, detaching) {
         for (let i = 0; i < iterations.length; i += 1) {
@@ -103,29 +104,15 @@ var app = (function () {
     function toggle_class(element, name, toggle) {
         element.classList[toggle ? 'add' : 'remove'](name);
     }
-    function custom_event(type, detail, bubbles = false) {
+    function custom_event(type, detail, { bubbles = false, cancelable = false } = {}) {
         const e = document.createEvent('CustomEvent');
-        e.initCustomEvent(type, bubbles, false, detail);
+        e.initCustomEvent(type, bubbles, cancelable, detail);
         return e;
     }
 
     let current_component;
     function set_current_component(component) {
         current_component = component;
-    }
-    function get_current_component() {
-        if (!current_component)
-            throw new Error('Function called outside component initialization');
-        return current_component;
-    }
-    function beforeUpdate(fn) {
-        get_current_component().$$.before_update.push(fn);
-    }
-    function onMount(fn) {
-        get_current_component().$$.on_mount.push(fn);
-    }
-    function afterUpdate(fn) {
-        get_current_component().$$.after_update.push(fn);
     }
 
     const dirty_components = [];
@@ -248,6 +235,9 @@ var app = (function () {
             });
             block.o(local);
         }
+        else if (callback) {
+            callback();
+        }
     }
 
     const globals = (typeof window !== 'undefined'
@@ -256,25 +246,30 @@ var app = (function () {
             ? globalThis
             : global);
 
-    function bind$1(component, name, callback) {
+    function bind$1(component, name, callback, value) {
         const index = component.$$.props[name];
         if (index !== undefined) {
             component.$$.bound[index] = callback;
-            callback(component.$$.ctx[index]);
+            if (value === undefined) {
+                callback(component.$$.ctx[index]);
+            }
         }
     }
     function create_component(block) {
         block && block.c();
     }
     function mount_component(component, target, anchor, customElement) {
-        const { fragment, on_mount, on_destroy, after_update } = component.$$;
+        const { fragment, after_update } = component.$$;
         fragment && fragment.m(target, anchor);
         if (!customElement) {
             // onMount happens before the initial afterUpdate
             add_render_callback(() => {
-                const new_on_destroy = on_mount.map(run).filter(is_function);
-                if (on_destroy) {
-                    on_destroy.push(...new_on_destroy);
+                const new_on_destroy = component.$$.on_mount.map(run).filter(is_function);
+                // if the component was destroyed immediately
+                // it will update the `$$.on_destroy` reference to `null`.
+                // the destructured on_destroy may still reference to the old array
+                if (component.$$.on_destroy) {
+                    component.$$.on_destroy.push(...new_on_destroy);
                 }
                 else {
                     // Edge case - component was destroyed immediately,
@@ -310,7 +305,7 @@ var app = (function () {
         set_current_component(component);
         const $$ = component.$$ = {
             fragment: null,
-            ctx: null,
+            ctx: [],
             // state
             props,
             update: noop,
@@ -375,6 +370,9 @@ var app = (function () {
             this.$destroy = noop;
         }
         $on(type, callback) {
+            if (!is_function(callback)) {
+                return noop;
+            }
             const callbacks = (this.$$.callbacks[type] || (this.$$.callbacks[type] = []));
             callbacks.push(callback);
             return () => {
@@ -393,7 +391,7 @@ var app = (function () {
     }
 
     function dispatch_dev(type, detail) {
-        document.dispatchEvent(custom_event(type, Object.assign({ version: '3.47.0' }, detail), true));
+        document.dispatchEvent(custom_event(type, Object.assign({ version: '3.55.0' }, detail), { bubbles: true }));
     }
     function append_dev(target, node) {
         dispatch_dev('SvelteDOMInsert', { target, node });
@@ -693,16 +691,6 @@ var app = (function () {
         checkDraw: checkDraw
     });
 
-    function fade(node, { delay = 0, duration = 400, easing = identity } = {}) {
-        const o = +getComputedStyle(node).opacity;
-        return {
-            delay,
-            duration,
-            easing,
-            css: t => `opacity: ${t * o}`
-        };
-    }
-
     const subscriber_queue = [];
     /**
      * Creates a `Readable` store that allows reading by subscription.
@@ -818,10 +806,10 @@ var app = (function () {
         }
     );
 
-    /* src\Square.svelte generated by Svelte v3.47.0 */
-    const file$3 = "src\\Square.svelte";
+    /* src/Square.svelte generated by Svelte v3.55.0 */
+    const file$3 = "src/Square.svelte";
 
-    // (25:4) {#if text === 'X'}
+    // (19:4) {#if text === 'X'}
     function create_if_block_1(ctx) {
     	let line0;
     	let line1;
@@ -839,7 +827,7 @@ var app = (function () {
     			attr_dev(line0, "y2", "80%");
     			attr_dev(line0, "class", "svelte-14ulk1k");
     			toggle_class(line0, "anim", /*anim*/ ctx[2]);
-    			add_location(line0, file$3, 25, 8, 734);
+    			add_location(line0, file$3, 19, 8, 675);
     			attr_dev(line1, "opacity", "0.6");
     			attr_dev(line1, "stroke", /*$gameMarkColor*/ ctx[6]);
     			attr_dev(line1, "stroke-width", "12%");
@@ -849,7 +837,7 @@ var app = (function () {
     			attr_dev(line1, "y2", "80%");
     			attr_dev(line1, "class", "svelte-14ulk1k");
     			toggle_class(line1, "anim", /*anim*/ ctx[2]);
-    			add_location(line1, file$3, 26, 8, 868);
+    			add_location(line1, file$3, 20, 8, 808);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, line0, anchor);
@@ -882,14 +870,14 @@ var app = (function () {
     		block,
     		id: create_if_block_1.name,
     		type: "if",
-    		source: "(25:4) {#if text === 'X'}",
+    		source: "(19:4) {#if text === 'X'}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (29:4) {#if text === 'O'}
+    // (23:4) {#if text === 'O'}
     function create_if_block$1(ctx) {
     	let circle;
 
@@ -905,7 +893,7 @@ var app = (function () {
     			attr_dev(circle, "r", "30%");
     			attr_dev(circle, "class", "svelte-14ulk1k");
     			toggle_class(circle, "anim", /*anim*/ ctx[2]);
-    			add_location(circle, file$3, 29, 8, 1041);
+    			add_location(circle, file$3, 23, 8, 978);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, circle, anchor);
@@ -928,7 +916,7 @@ var app = (function () {
     		block,
     		id: create_if_block$1.name,
     		type: "if",
-    		source: "(29:4) {#if text === 'O'}",
+    		source: "(23:4) {#if text === 'O'}",
     		ctx
     	});
 
@@ -960,16 +948,16 @@ var app = (function () {
     			attr_dev(animate, "values", "blue;green;blue");
     			attr_dev(animate, "dur", "0.5s");
     			attr_dev(animate, "repeatCount", "1");
-    			add_location(animate, file$3, 18, 0, 366);
+    			add_location(animate, file$3, 12, 0, 314);
     			attr_dev(svg, "viewBox", "0 0 32 32");
     			attr_dev(svg, "xmlns", "http://www.w3.org/2000/svg");
-    			add_location(svg, file$3, 23, 4, 639);
+    			add_location(svg, file$3, 17, 4, 582);
     			attr_dev(button, "class", "square svelte-14ulk1k");
     			set_style(button, "width", /*size*/ ctx[3] + "px");
     			set_style(button, "height", /*size*/ ctx[3] + "px");
     			set_style(button, "background", /*$gameBackground*/ ctx[4]);
     			set_style(button, "border-color", /*$gameLineColor*/ ctx[5]);
-    			add_location(button, file$3, 22, 0, 490);
+    			add_location(button, file$3, 16, 0, 434);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -1087,6 +1075,16 @@ var app = (function () {
     	//$: console.log($gameMarkColor);
     	let testValue = 2;
 
+    	$$self.$$.on_mount.push(function () {
+    		if (onClick === undefined && !('onClick' in $$props || $$self.$$.bound[$$self.$$.props['onClick']])) {
+    			console.warn("<Square> was created without expected prop 'onClick'");
+    		}
+
+    		if (size === undefined && !('size' in $$props || $$self.$$.bound[$$self.$$.props['size']])) {
+    			console.warn("<Square> was created without expected prop 'size'");
+    		}
+    	});
+
     	const writable_props = ['text', 'onClick', 'anim', 'size'];
 
     	Object.keys($$props).forEach(key => {
@@ -1101,9 +1099,6 @@ var app = (function () {
     	};
 
     	$$self.$capture_state = () => ({
-    		fade,
-    		vw,
-    		vh,
     		gameBackground,
     		gameLineColor,
     		gameMarkColor,
@@ -1143,17 +1138,6 @@ var app = (function () {
     			options,
     			id: create_fragment$3.name
     		});
-
-    		const { ctx } = this.$$;
-    		const props = options.props || {};
-
-    		if (/*onClick*/ ctx[1] === undefined && !('onClick' in props)) {
-    			console.warn("<Square> was created without expected prop 'onClick'");
-    		}
-
-    		if (/*size*/ ctx[3] === undefined && !('size' in props)) {
-    			console.warn("<Square> was created without expected prop 'size'");
-    		}
     	}
 
     	get text() {
@@ -1189,10 +1173,10 @@ var app = (function () {
     	}
     }
 
-    /* src\Resizebutton.svelte generated by Svelte v3.47.0 */
+    /* src/Resizebutton.svelte generated by Svelte v3.55.0 */
 
     const { console: console_1$2 } = globals;
-    const file$2 = "src\\Resizebutton.svelte";
+    const file$2 = "src/Resizebutton.svelte";
 
     function create_fragment$2(ctx) {
     	let button;
@@ -1217,7 +1201,7 @@ var app = (function () {
     			attr_dev(line0, "y1", "90%");
     			attr_dev(line0, "x2", "90%");
     			attr_dev(line0, "y2", "10%");
-    			add_location(line0, file$2, 43, 8, 1187);
+    			add_location(line0, file$2, 43, 8, 1144);
     			attr_dev(line1, "opacity", "0.6");
     			attr_dev(line1, "stroke", /*$gameBackground*/ ctx[2]);
     			attr_dev(line1, "stroke-width", "12%");
@@ -1225,7 +1209,7 @@ var app = (function () {
     			attr_dev(line1, "y1", "90%");
     			attr_dev(line1, "x2", "90%");
     			attr_dev(line1, "y2", "40%");
-    			add_location(line1, file$2, 44, 8, 1299);
+    			add_location(line1, file$2, 44, 8, 1255);
     			attr_dev(line2, "opacity", "0.6");
     			attr_dev(line2, "stroke", /*$gameBackground*/ ctx[2]);
     			attr_dev(line2, "stroke-width", "12%");
@@ -1233,17 +1217,17 @@ var app = (function () {
     			attr_dev(line2, "y1", "90%");
     			attr_dev(line2, "x2", "90%");
     			attr_dev(line2, "y2", "70%");
-    			add_location(line2, file$2, 45, 8, 1411);
+    			add_location(line2, file$2, 45, 8, 1366);
     			attr_dev(svg, "viewBox", "0 0 24 24");
     			attr_dev(svg, "xmlns", "http://www.w3.org/2000/svg");
-    			add_location(svg, file$2, 40, 4, 939);
+    			add_location(svg, file$2, 40, 4, 899);
     			set_style(button, "top", /*top*/ ctx[0] + 8 + "px");
     			set_style(button, "left", /*left*/ ctx[1] + 8 + "px");
     			set_style(button, "color", /*$gameBackground*/ ctx[2]);
     			set_style(button, "width", 12 + "px");
     			set_style(button, "height", 12 + "px");
     			attr_dev(button, "class", "svelte-1xx9mh4");
-    			add_location(button, file$2, 39, 0, 806);
+    			add_location(button, file$2, 39, 0, 767);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -3447,11 +3431,11 @@ var app = (function () {
 
     var axios = axios_1;
 
-    /* src\Game.svelte generated by Svelte v3.47.0 */
+    /* src/Game.svelte generated by Svelte v3.55.0 */
 
     const { console: console_1$1 } = globals;
 
-    const file$1 = "src\\Game.svelte";
+    const file$1 = "src/Game.svelte";
 
     function get_each_context(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -3467,7 +3451,7 @@ var app = (function () {
     	return child_ctx;
     }
 
-    // (217:4) {#if winner === 'X' || winner === 'O'}
+    // (170:4) {#if winner === 'X' || winner === 'O'}
     function create_if_block(ctx) {
     	let svg;
     	let line_1;
@@ -3491,7 +3475,7 @@ var app = (function () {
     			attr_dev(animate, "attributeName", "stroke");
     			attr_dev(animate, "dur", "0.5s");
     			attr_dev(animate, "repeatCount", "5");
-    			add_location(animate, file$1, 221, 12, 7289);
+    			add_location(animate, file$1, 174, 12, 6107);
     			attr_dev(line_1, "class", "path--");
     			attr_dev(line_1, "x1", line_1_x__value = /*line*/ ctx[4][0]);
     			attr_dev(line_1, "y1", line_1_y__value = /*line*/ ctx[4][1]);
@@ -3501,11 +3485,11 @@ var app = (function () {
     			attr_dev(line_1, "opacity", "0.6");
     			attr_dev(line_1, "stroke-width", line_1_stroke_width_value = /*squareSize*/ ctx[6] / 3);
     			attr_dev(line_1, "stroke-linecap", "round");
-    			add_location(line_1, file$1, 218, 8, 7073);
+    			add_location(line_1, file$1, 171, 8, 5894);
     			attr_dev(svg, "height", svg_height_value = /*bSize*/ ctx[0] * /*squareSize*/ ctx[6]);
     			attr_dev(svg, "width", svg_width_value = /*bSize*/ ctx[0] * /*squareSize*/ ctx[6]);
     			attr_dev(svg, "class", "svelte-1ag8sq8");
-    			add_location(svg, file$1, 217, 4, 7003);
+    			add_location(svg, file$1, 170, 4, 5825);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, svg, anchor);
@@ -3558,14 +3542,14 @@ var app = (function () {
     		block,
     		id: create_if_block.name,
     		type: "if",
-    		source: "(217:4) {#if winner === 'X' || winner === 'O'}",
+    		source: "(170:4) {#if winner === 'X' || winner === 'O'}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (232:2) {#each row as square, j}
+    // (185:2) {#each row as square, j}
     function create_each_block_1(ctx) {
     	let square;
     	let current;
@@ -3629,14 +3613,14 @@ var app = (function () {
     		block,
     		id: create_each_block_1.name,
     		type: "each",
-    		source: "(232:2) {#each row as square, j}",
+    		source: "(185:2) {#each row as square, j}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (230:4) {#each squares as row, i}
+    // (183:4) {#each squares as row, i}
     function create_each_block(ctx) {
     	let div;
     	let current;
@@ -3661,7 +3645,7 @@ var app = (function () {
     			}
 
     			attr_dev(div, "class", "board-row svelte-1ag8sq8");
-    			add_location(div, file$1, 230, 2, 7835);
+    			add_location(div, file$1, 183, 2, 6644);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -3729,7 +3713,7 @@ var app = (function () {
     		block,
     		id: create_each_block.name,
     		type: "each",
-    		source: "(230:4) {#each squares as row, i}",
+    		source: "(183:4) {#each squares as row, i}",
     		ctx
     	});
 
@@ -3774,7 +3758,7 @@ var app = (function () {
     			$$inline: true
     		});
 
-    	binding_callbacks.push(() => bind$1(resizebutton, 'resized', resizebutton_resized_binding));
+    	binding_callbacks.push(() => bind$1(resizebutton, 'resized', resizebutton_resized_binding, /*resizedSize*/ ctx[5]));
 
     	const block = {
     		c: function create() {
@@ -3792,7 +3776,7 @@ var app = (function () {
     			set_style(div, "background-color", /*$gameBackground*/ ctx[9]);
     			set_style(div, "width", /*bSize*/ ctx[0] * /*squareSize*/ ctx[6] + 39 + "px");
     			set_style(div, "border-color", /*borderColor*/ ctx[8]);
-    			add_location(div, file$1, 215, 0, 6826);
+    			add_location(div, file$1, 168, 0, 5650);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -3964,7 +3948,7 @@ var app = (function () {
     			return;
     		}
 
-    		playAI('O');
+    		playAI();
     	} //background = "#251";    
 
     	async function testNode() {
@@ -4037,21 +4021,19 @@ var app = (function () {
     		console.log("AI plays...");
 
     		//testNode();
-    		doPost(inTurn);
-    	} //testMove = doGet();
-    	/*console.log('Move: ' + testMove);
+    		// doPost(inTurn);
+    		//testMove = doGet();
+    		//console.log('Move: ' + testMove);
+    		if (winner !== '') return; // game over
 
-    if (winner !== '')
-        return; // game over
-    let move = AI.playMove(squares.slice());        
-    squares[move.x][move.y] = 'O';
-    lastMove = {x: move.x, y: move.y};
-    winnerLine = AI.checkFive(move.x, move.y, squares);
-    console.log("winnerLine: " + winnerLine);
-
-    console.log("Tasuri? " + AI.checkDraw(squares));
-    if (AI.checkDraw(squares))
-        winner = "Tasapeli";*/
+    		let move = playMove(squares.slice());
+    		$$invalidate(2, squares[move.x][move.y] = 'O', squares);
+    		$$invalidate(3, lastMove = { x: move.x, y: move.y });
+    		$$invalidate(15, winnerLine = checkFive(move.x, move.y, squares));
+    		console.log("winnerLine: " + winnerLine);
+    		console.log("Tasuri? " + checkDraw(squares));
+    		if (checkDraw(squares)) $$invalidate(1, winner = "Tasapeli");
+    	}
 
     	function newGame(size = 15) {
     		$$invalidate(0, bSize = size);
@@ -4106,14 +4088,10 @@ var app = (function () {
     		AI,
     		Square,
     		Resizebutton,
-    		fade,
-    		beforeUpdate,
-    		afterUpdate,
     		vw,
     		gameBackground,
     		gameLineColor,
     		gameMarkColor,
-    		App,
     		axios,
     		winner,
     		bSize,
@@ -4282,10 +4260,10 @@ var app = (function () {
     	}
     }
 
-    /* src\App.svelte generated by Svelte v3.47.0 */
+    /* src/App.svelte generated by Svelte v3.55.0 */
 
     const { console: console_1 } = globals;
-    const file = "src\\App.svelte";
+    const file = "src/App.svelte";
 
     function create_fragment(ctx) {
     	let meta;
@@ -4371,7 +4349,7 @@ var app = (function () {
     	}
 
     	game = new Game({ props: game_props, $$inline: true });
-    	binding_callbacks.push(() => bind$1(game, 'winner', game_winner_binding));
+    	binding_callbacks.push(() => bind$1(game, 'winner', game_winner_binding, /*win*/ ctx[0]));
     	/*game_binding*/ ctx[8](game);
 
     	const block = {
@@ -4448,88 +4426,88 @@ var app = (function () {
     			document.title = "Ristinolla";
     			attr_dev(meta, "name", "robots");
     			attr_dev(meta, "content", "noindex nofollow");
-    			add_location(meta, file, 39, 1, 889);
+    			add_location(meta, file, 34, 1, 836);
     			attr_dev(html, "lang", "fi");
-    			add_location(html, file, 40, 1, 941);
+    			add_location(html, file, 35, 1, 887);
     			attr_dev(h10, "class", "svelte-1oqvegt");
-    			add_location(h10, file, 44, 1, 1002);
+    			add_location(h10, file, 39, 1, 944);
     			attr_dev(div0, "class", "header svelte-1oqvegt");
-    			add_location(div0, file, 43, 0, 979);
+    			add_location(div0, file, 38, 0, 922);
     			attr_dev(legend, "align", "center");
     			attr_dev(legend, "class", "svelte-1oqvegt");
-    			add_location(legend, file, 50, 3, 1133);
+    			add_location(legend, file, 45, 3, 1069);
     			attr_dev(th0, "class", "svelte-1oqvegt");
-    			add_location(th0, file, 53, 6, 1224);
+    			add_location(th0, file, 48, 6, 1157);
     			attr_dev(th1, "class", "svelte-1oqvegt");
-    			add_location(th1, file, 54, 6, 1242);
+    			add_location(th1, file, 49, 6, 1174);
     			attr_dev(tr0, "class", "svelte-1oqvegt");
-    			add_location(tr0, file, 52, 4, 1212);
+    			add_location(tr0, file, 47, 4, 1146);
     			attr_dev(td0, "id", "xscore");
     			attr_dev(td0, "class", "scores svelte-1oqvegt");
-    			add_location(td0, file, 57, 6, 1281);
+    			add_location(td0, file, 52, 6, 1210);
     			attr_dev(td1, "id", "oscore");
     			attr_dev(td1, "class", "scores svelte-1oqvegt");
-    			add_location(td1, file, 58, 6, 1334);
+    			add_location(td1, file, 53, 6, 1262);
     			attr_dev(tr1, "class", "svelte-1oqvegt");
-    			add_location(tr1, file, 56, 4, 1269);
+    			add_location(tr1, file, 51, 4, 1199);
     			attr_dev(table, "class", "scores svelte-1oqvegt");
-    			add_location(table, file, 51, 3, 1184);
+    			add_location(table, file, 46, 3, 1119);
     			attr_dev(br, "class", "svelte-1oqvegt");
-    			add_location(br, file, 61, 3, 1408);
+    			add_location(br, file, 56, 3, 1333);
     			attr_dev(p0, "class", "svelte-1oqvegt");
-    			add_location(p0, file, 62, 3, 1417);
+    			add_location(p0, file, 57, 3, 1341);
     			attr_dev(fieldset, "class", "svelte-1oqvegt");
-    			add_location(fieldset, file, 49, 2, 1118);
+    			add_location(fieldset, file, 44, 2, 1055);
     			button0.disabled = button0_disabled_value = /*win*/ ctx[0] !== '' ? false : true;
     			attr_dev(button0, "class", "svelte-1oqvegt");
-    			add_location(button0, file, 65, 2, 1547);
+    			add_location(button0, file, 60, 2, 1468);
     			attr_dev(button1, "class", "svelte-1oqvegt");
-    			add_location(button1, file, 66, 2, 1661);
+    			add_location(button1, file, 61, 2, 1581);
     			attr_dev(div1, "class", "left svelte-1oqvegt");
     			set_style(div1, "background", /*color2*/ ctx[4] + "55");
     			set_style(div1, "color", "black");
-    			add_location(div1, file, 48, 1, 1044);
+    			add_location(div1, file, 43, 1, 982);
     			attr_dev(div2, "class", "middle svelte-1oqvegt");
-    			add_location(div2, file, 69, 1, 1736);
+    			add_location(div2, file, 64, 1, 1653);
     			attr_dev(h11, "class", "svelte-1oqvegt");
-    			add_location(h11, file, 74, 2, 1949);
+    			add_location(h11, file, 69, 2, 1861);
     			attr_dev(input0, "type", "color");
     			attr_dev(input0, "id", "head");
     			attr_dev(input0, "name", "head");
     			attr_dev(input0, "class", "svelte-1oqvegt");
-    			add_location(input0, file, 76, 3, 1981);
+    			add_location(input0, file, 71, 3, 1891);
     			attr_dev(label0, "for", "head");
     			attr_dev(label0, "class", "svelte-1oqvegt");
-    			add_location(label0, file, 78, 3, 2053);
+    			add_location(label0, file, 73, 3, 1961);
     			attr_dev(div3, "class", "svelte-1oqvegt");
-    			add_location(div3, file, 75, 2, 1971);
+    			add_location(div3, file, 70, 2, 1882);
     			attr_dev(input1, "type", "color");
     			attr_dev(input1, "id", "body");
     			attr_dev(input1, "name", "body");
     			attr_dev(input1, "class", "svelte-1oqvegt");
-    			add_location(input1, file, 81, 3, 2111);
+    			add_location(input1, file, 76, 3, 2016);
     			attr_dev(label1, "for", "body");
     			attr_dev(label1, "class", "svelte-1oqvegt");
-    			add_location(label1, file, 83, 3, 2183);
+    			add_location(label1, file, 78, 3, 2086);
     			attr_dev(div4, "class", "svelte-1oqvegt");
-    			add_location(div4, file, 80, 2, 2101);
+    			add_location(div4, file, 75, 2, 2007);
     			attr_dev(p1, "class", "svelte-1oqvegt");
-    			add_location(p1, file, 85, 2, 2228);
+    			add_location(p1, file, 80, 2, 2129);
     			attr_dev(button2, "class", "svelte-1oqvegt");
-    			add_location(button2, file, 86, 2, 2253);
+    			add_location(button2, file, 81, 2, 2153);
     			attr_dev(button3, "class", "svelte-1oqvegt");
-    			add_location(button3, file, 87, 2, 2340);
+    			add_location(button3, file, 82, 2, 2239);
     			attr_dev(input2, "type", "range");
     			attr_dev(input2, "min", "5");
     			attr_dev(input2, "max", "30");
     			attr_dev(input2, "class", "svelte-1oqvegt");
-    			add_location(input2, file, 88, 2, 2427);
+    			add_location(input2, file, 83, 2, 2325);
     			attr_dev(div5, "class", "right svelte-1oqvegt");
     			set_style(div5, "background", /*color2*/ ctx[4] + "55");
     			set_style(div5, "color", "black");
-    			add_location(div5, file, 73, 1, 1874);
+    			add_location(div5, file, 68, 1, 1787);
     			attr_dev(main, "class", "svelte-1oqvegt");
-    			add_location(main, file, 47, 0, 1035);
+    			add_location(main, file, 42, 0, 974);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -4770,7 +4748,6 @@ var app = (function () {
     	}
 
     	$$self.$capture_state = () => ({
-    		onMount,
     		Game,
     		gameBackground,
     		gameLineColor,
@@ -4862,7 +4839,7 @@ var app = (function () {
     }
 
     const app = new App({
-    	target: document.body	
+        target: document.body
     });
 
     return app;

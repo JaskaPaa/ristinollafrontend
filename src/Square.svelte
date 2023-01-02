@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 
 import { fade } from 'svelte/transition';
 import { vw } from './stores.js';
@@ -6,9 +6,9 @@ import { vh } from './stores.js';
 import { gameBackground, gameLineColor, gameMarkColor } from './stores.js';
 
 export let text = '';
-export let onClick;
+export let onClick: (x: any, y: any) => void;
 export let anim = false;
-export let size;
+export let size: number;
 
 //$: console.log($gameMarkColor);
 
