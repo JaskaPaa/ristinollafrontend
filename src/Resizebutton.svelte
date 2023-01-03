@@ -1,4 +1,4 @@
-<script>
+<script lang='ts'>
 
 import { gameBackground } from './stores.js';
 
@@ -12,13 +12,13 @@ let left2 = size;
 
 let started = false;
 
-function startDrag(e) {    
+function startDrag() {    
     started = true;
     window.addEventListener('mousemove', handleMousemove);
     window.addEventListener('mouseup', stopDrag);
 }
 
-function handleMousemove(e) {
+function handleMousemove(e: MouseEvent): void {
     if (started) {
         left2 += e.movementX;
         top2  += e.movementY;
@@ -27,8 +27,9 @@ function handleMousemove(e) {
     }
 }
 
-function stopDrag(e) {
+function stopDrag(e: MouseEvent): void {
     console.log(`Mouse up: ${e.x}, ${e.y}`);
+    console.log(`Event: ${e}`);
     started = false;
     window.removeEventListener("mousemove", handleMousemove);
     window.removeEventListener('mouseup', stopDrag);

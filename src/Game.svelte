@@ -1,4 +1,4 @@
-<script lang=ts>
+<script lang='ts'>
 
     import * as AI from "./AI.js";
 	import Square from './Square.svelte';

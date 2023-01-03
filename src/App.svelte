@@ -48,7 +48,7 @@
 <main>
 	<div class="left" style="background: {color2+"55"}; color: {"black"}">
 		<fieldset>
-			<legend align="center">Pelitilanne</legend>			
+			<legend>Pelitilanne</legend>			
 			<table class="scores">
 				<tr>
 				  <th>X</th>

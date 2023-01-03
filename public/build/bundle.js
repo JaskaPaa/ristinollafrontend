@@ -1201,7 +1201,7 @@ var app = (function () {
     			attr_dev(line0, "y1", "90%");
     			attr_dev(line0, "x2", "90%");
     			attr_dev(line0, "y2", "10%");
-    			add_location(line0, file$2, 43, 8, 1144);
+    			add_location(line0, file$2, 33, 8, 1154);
     			attr_dev(line1, "opacity", "0.6");
     			attr_dev(line1, "stroke", /*$gameBackground*/ ctx[2]);
     			attr_dev(line1, "stroke-width", "12%");
@@ -1209,7 +1209,7 @@ var app = (function () {
     			attr_dev(line1, "y1", "90%");
     			attr_dev(line1, "x2", "90%");
     			attr_dev(line1, "y2", "40%");
-    			add_location(line1, file$2, 44, 8, 1255);
+    			add_location(line1, file$2, 34, 8, 1265);
     			attr_dev(line2, "opacity", "0.6");
     			attr_dev(line2, "stroke", /*$gameBackground*/ ctx[2]);
     			attr_dev(line2, "stroke-width", "12%");
@@ -1217,17 +1217,17 @@ var app = (function () {
     			attr_dev(line2, "y1", "90%");
     			attr_dev(line2, "x2", "90%");
     			attr_dev(line2, "y2", "70%");
-    			add_location(line2, file$2, 45, 8, 1366);
+    			add_location(line2, file$2, 35, 8, 1376);
     			attr_dev(svg, "viewBox", "0 0 24 24");
     			attr_dev(svg, "xmlns", "http://www.w3.org/2000/svg");
-    			add_location(svg, file$2, 40, 4, 899);
+    			add_location(svg, file$2, 30, 4, 909);
     			set_style(button, "top", /*top*/ ctx[0] + 8 + "px");
     			set_style(button, "left", /*left*/ ctx[1] + 8 + "px");
     			set_style(button, "color", /*$gameBackground*/ ctx[2]);
     			set_style(button, "width", 12 + "px");
     			set_style(button, "height", 12 + "px");
     			attr_dev(button, "class", "svelte-1xx9mh4");
-    			add_location(button, file$2, 39, 0, 767);
+    			add_location(button, file$2, 29, 0, 777);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -1303,7 +1303,7 @@ var app = (function () {
     	let left2 = size;
     	let started = false;
 
-    	function startDrag(e) {
+    	function startDrag() {
     		started = true;
     		window.addEventListener('mousemove', handleMousemove);
     		window.addEventListener('mouseup', stopDrag);
@@ -1319,6 +1319,7 @@ var app = (function () {
 
     	function stopDrag(e) {
     		console.log(`Mouse up: ${e.x}, ${e.y}`);
+    		console.log(`Event: ${e}`);
     		started = false;
     		window.removeEventListener("mousemove", handleMousemove);
     		window.removeEventListener('mouseup', stopDrag);
@@ -3475,7 +3476,7 @@ var app = (function () {
     			attr_dev(animate, "attributeName", "stroke");
     			attr_dev(animate, "dur", "0.5s");
     			attr_dev(animate, "repeatCount", "5");
-    			add_location(animate, file$1, 174, 12, 6107);
+    			add_location(animate, file$1, 174, 12, 6109);
     			attr_dev(line_1, "class", "path--");
     			attr_dev(line_1, "x1", line_1_x__value = /*line*/ ctx[4][0]);
     			attr_dev(line_1, "y1", line_1_y__value = /*line*/ ctx[4][1]);
@@ -3485,11 +3486,11 @@ var app = (function () {
     			attr_dev(line_1, "opacity", "0.6");
     			attr_dev(line_1, "stroke-width", line_1_stroke_width_value = /*squareSize*/ ctx[6] / 3);
     			attr_dev(line_1, "stroke-linecap", "round");
-    			add_location(line_1, file$1, 171, 8, 5894);
+    			add_location(line_1, file$1, 171, 8, 5896);
     			attr_dev(svg, "height", svg_height_value = /*bSize*/ ctx[0] * /*squareSize*/ ctx[6]);
     			attr_dev(svg, "width", svg_width_value = /*bSize*/ ctx[0] * /*squareSize*/ ctx[6]);
     			attr_dev(svg, "class", "svelte-1ag8sq8");
-    			add_location(svg, file$1, 170, 4, 5825);
+    			add_location(svg, file$1, 170, 4, 5827);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, svg, anchor);
@@ -3645,7 +3646,7 @@ var app = (function () {
     			}
 
     			attr_dev(div, "class", "board-row svelte-1ag8sq8");
-    			add_location(div, file$1, 183, 2, 6644);
+    			add_location(div, file$1, 183, 2, 6646);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -3776,7 +3777,7 @@ var app = (function () {
     			set_style(div, "background-color", /*$gameBackground*/ ctx[9]);
     			set_style(div, "width", /*bSize*/ ctx[0] * /*squareSize*/ ctx[6] + 39 + "px");
     			set_style(div, "border-color", /*borderColor*/ ctx[8]);
-    			add_location(div, file$1, 168, 0, 5650);
+    			add_location(div, file$1, 168, 0, 5652);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -4433,79 +4434,78 @@ var app = (function () {
     			add_location(h10, file, 39, 1, 944);
     			attr_dev(div0, "class", "header svelte-1oqvegt");
     			add_location(div0, file, 38, 0, 922);
-    			attr_dev(legend, "align", "center");
     			attr_dev(legend, "class", "svelte-1oqvegt");
     			add_location(legend, file, 45, 3, 1069);
     			attr_dev(th0, "class", "svelte-1oqvegt");
-    			add_location(th0, file, 48, 6, 1157);
+    			add_location(th0, file, 48, 6, 1142);
     			attr_dev(th1, "class", "svelte-1oqvegt");
-    			add_location(th1, file, 49, 6, 1174);
+    			add_location(th1, file, 49, 6, 1159);
     			attr_dev(tr0, "class", "svelte-1oqvegt");
-    			add_location(tr0, file, 47, 4, 1146);
+    			add_location(tr0, file, 47, 4, 1131);
     			attr_dev(td0, "id", "xscore");
     			attr_dev(td0, "class", "scores svelte-1oqvegt");
-    			add_location(td0, file, 52, 6, 1210);
+    			add_location(td0, file, 52, 6, 1195);
     			attr_dev(td1, "id", "oscore");
     			attr_dev(td1, "class", "scores svelte-1oqvegt");
-    			add_location(td1, file, 53, 6, 1262);
+    			add_location(td1, file, 53, 6, 1247);
     			attr_dev(tr1, "class", "svelte-1oqvegt");
-    			add_location(tr1, file, 51, 4, 1199);
+    			add_location(tr1, file, 51, 4, 1184);
     			attr_dev(table, "class", "scores svelte-1oqvegt");
-    			add_location(table, file, 46, 3, 1119);
+    			add_location(table, file, 46, 3, 1104);
     			attr_dev(br, "class", "svelte-1oqvegt");
-    			add_location(br, file, 56, 3, 1333);
+    			add_location(br, file, 56, 3, 1318);
     			attr_dev(p0, "class", "svelte-1oqvegt");
-    			add_location(p0, file, 57, 3, 1341);
+    			add_location(p0, file, 57, 3, 1326);
     			attr_dev(fieldset, "class", "svelte-1oqvegt");
     			add_location(fieldset, file, 44, 2, 1055);
     			button0.disabled = button0_disabled_value = /*win*/ ctx[0] !== '' ? false : true;
     			attr_dev(button0, "class", "svelte-1oqvegt");
-    			add_location(button0, file, 60, 2, 1468);
+    			add_location(button0, file, 60, 2, 1453);
     			attr_dev(button1, "class", "svelte-1oqvegt");
-    			add_location(button1, file, 61, 2, 1581);
+    			add_location(button1, file, 61, 2, 1566);
     			attr_dev(div1, "class", "left svelte-1oqvegt");
     			set_style(div1, "background", /*color2*/ ctx[4] + "55");
     			set_style(div1, "color", "black");
     			add_location(div1, file, 43, 1, 982);
     			attr_dev(div2, "class", "middle svelte-1oqvegt");
-    			add_location(div2, file, 64, 1, 1653);
+    			add_location(div2, file, 64, 1, 1638);
     			attr_dev(h11, "class", "svelte-1oqvegt");
-    			add_location(h11, file, 69, 2, 1861);
+    			add_location(h11, file, 69, 2, 1846);
     			attr_dev(input0, "type", "color");
     			attr_dev(input0, "id", "head");
     			attr_dev(input0, "name", "head");
     			attr_dev(input0, "class", "svelte-1oqvegt");
-    			add_location(input0, file, 71, 3, 1891);
+    			add_location(input0, file, 71, 3, 1876);
     			attr_dev(label0, "for", "head");
     			attr_dev(label0, "class", "svelte-1oqvegt");
-    			add_location(label0, file, 73, 3, 1961);
+    			add_location(label0, file, 73, 3, 1946);
     			attr_dev(div3, "class", "svelte-1oqvegt");
-    			add_location(div3, file, 70, 2, 1882);
+    			add_location(div3, file, 70, 2, 1867);
     			attr_dev(input1, "type", "color");
     			attr_dev(input1, "id", "body");
     			attr_dev(input1, "name", "body");
     			attr_dev(input1, "class", "svelte-1oqvegt");
-    			add_location(input1, file, 76, 3, 2016);
+    			add_location(input1, file, 76, 3, 2001);
     			attr_dev(label1, "for", "body");
     			attr_dev(label1, "class", "svelte-1oqvegt");
-    			add_location(label1, file, 78, 3, 2086);
+    			add_location(label1, file, 78, 3, 2071);
     			attr_dev(div4, "class", "svelte-1oqvegt");
-    			add_location(div4, file, 75, 2, 2007);
+    			add_location(div4, file, 75, 2, 1992);
     			attr_dev(p1, "class", "svelte-1oqvegt");
-    			add_location(p1, file, 80, 2, 2129);
+    			add_location(p1, file, 80, 2, 2114);
     			attr_dev(button2, "class", "svelte-1oqvegt");
-    			add_location(button2, file, 81, 2, 2153);
+    			add_location(button2, file, 81, 2, 2138);
     			attr_dev(button3, "class", "svelte-1oqvegt");
-    			add_location(button3, file, 82, 2, 2239);
+    			add_location(button3, file, 82, 2, 2224);
     			attr_dev(input2, "type", "range");
     			attr_dev(input2, "min", "5");
     			attr_dev(input2, "max", "30");
     			attr_dev(input2, "class", "svelte-1oqvegt");
-    			add_location(input2, file, 83, 2, 2325);
+    			add_location(input2, file, 83, 2, 2310);
     			attr_dev(div5, "class", "right svelte-1oqvegt");
     			set_style(div5, "background", /*color2*/ ctx[4] + "55");
     			set_style(div5, "color", "black");
-    			add_location(div5, file, 68, 1, 1787);
+    			add_location(div5, file, 68, 1, 1772);
     			attr_dev(main, "class", "svelte-1oqvegt");
     			add_location(main, file, 42, 0, 974);
     		},

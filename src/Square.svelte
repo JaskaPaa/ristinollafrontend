@@ -6,7 +6,7 @@ import { vh } from './stores.js';
 import { gameBackground, gameLineColor, gameMarkColor } from './stores.js';
 
 export let text = '';
-export let onClick: (x: any, y: any) => void;
+export let onClick: (x: number, y: number) => void;
 export let anim = false;
 export let size: number;
 
