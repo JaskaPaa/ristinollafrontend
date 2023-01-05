@@ -6,7 +6,7 @@ import { vh } from './stores.js';
 import { gameBackground, gameLineColor, gameMarkColor } from './stores.js';
 
 export let text = '';
-export let onClick: (x: number, y: number) => void;
+export let onClick: any; //(x: number, y: number) => void;
 export let anim = false;
 export let size: number;
 
@@ -20,7 +20,7 @@ let testValue = 2;
             dur="0.5s" repeatCount="1"/>
 
 
-<button on:click={onClick} class="square" style="width:{size}px; height:{size}px; background:{$gameBackground}; border-color:{$gameLineColor}">
+<button on:click|preventDefault={onClick} class="square" style="width:{size}px; height:{size}px; background:{$gameBackground}; border-color:{$gameLineColor}">
     <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
     {#if text === 'X'}	
         <line class:anim={anim} opacity="0.6" stroke={$gameMarkColor} stroke-width="12%" x1="20%" y1="20%" x2="80%" y2="80%"></line>

@@ -16,7 +16,7 @@
     export let winner = '';
     export let bSize = 15;
 
-    let squares = Array(bSize).fill().map(()=> Array(bSize).fill("-"));
+    let squares = Array(bSize).fill(null).map(()=> Array(bSize).fill("-"));
     let winnerLine = [];
     let lastMove = {x: 0, y: 0};
     let visible = false;
@@ -141,8 +141,9 @@
 
     let count = 0;
 
-    function doMove(move) {
-        console.log(move.x + ", " + move.y)
+    function doMove(move: { x: number; y: number; mark: string }) {
+        //console.log(move.x + ", " + move.y)
+
         squares[move.x][move.y] = move.mark;
         lastMove = {x: move.x, y: move.y};
         winnerLine = AI.checkFive(move.x, move.y, squares);        
@@ -184,7 +185,7 @@
 
     export function newGame(size=15) {
         bSize = size;
-        squares = Array(bSize).fill().map(()=> Array(bSize).fill("-"));
+        squares = Array(bSize).fill(null).map(()=> Array(bSize).fill("-"));
         winnerLine = [];
         winner = '';
         humanPlaysFirstMove = (humanPlaysFirstMove) ? false : true;
@@ -203,7 +204,7 @@
         setTimeout(()=> {visible = false}, 500);        
     }
 
-    function changeXO(mark) {
+    function changeXO(mark: string) {
         // stupid AI play always as 'O', so we have to change it this way  
         if (switchXO === true)
             return (mark === 'X') ? 'O' : 'X';

@@ -78,6 +78,13 @@ var app = (function () {
         node.addEventListener(event, handler, options);
         return () => node.removeEventListener(event, handler, options);
     }
+    function prevent_default(fn) {
+        return function (event) {
+            event.preventDefault();
+            // @ts-ignore
+            return fn.call(this, event);
+        };
+    }
     function attr(node, attribute, value) {
         if (value == null)
             node.removeAttribute(attribute);
@@ -474,214 +481,176 @@ var app = (function () {
 
     let sq;
     let size;
-
     function playMove(squares) {
-
         let moves = [];
         sq = squares.slice();
         size = sq.length;
-
-        for(var i = 0; i < sq.length; i++) {
+        for (var i = 0; i < sq.length; i++) {
             var row = sq[i];
-            for(var j = 0; j < row.length; j++) {
+            for (var j = 0; j < row.length; j++) {
                 if (sq[i][j] === '-')
-                    moves.push({value: squareValue(i,j), move: [i,j]});
+                    moves.push({ value: squareValue(i, j), move: [i, j] });
             }
         }
-
-        moves.sort((a,b) => b.value - a.value);
-
-        if (moves.length === size*size)
-            return {x: Math.round(size/2)-1, y:  Math.round(size/2)-1}; // AI plays the first move
-
-        return {x: moves[0].move[0], y:  moves[0].move[1]};
+        moves.sort((a, b) => b.value - a.value);
+        if (moves.length === size * size)
+            return { x: Math.round(size / 2) - 1, y: Math.round(size / 2) - 1 }; // AI plays the first move
+        return { x: moves[0].move[0], y: moves[0].move[1] };
     }
-
     function squareValue(x, y) {
-        var c, k, len1, ref, str, total;
-        total = 0;
-        ref = ["X", "O"];
-        for (k = 0, len1 = ref.length; k < len1; k++) {
-          c = ref[k];
-          sq[x][y] = c;
-          str = from_to(x, y - 5, 0, +1, 11); //vertical
-          total += row_value(str, c);
-          str = from_to(x - 5, y, +1, 0, 11); //horizontal
-          total += row_value(str, c);
-          str = from_to(x - 5, y - 5, +1, +1, 11); //diagonal
-          total += row_value(str, c);
-          str = from_to(x + 5, y - 5, -1, +1, 11); //diagonal
-          total += row_value(str, c);
+        let str = '';
+        let total = 0;
+        const chars = ["X", "O"];
+        for (const c of chars) {
+            //c = ref[k];
+            sq[x][y] = c;
+            str = from_to(x, y - 5, 0, +1, 11); //vertical
+            total += row_value(str, c);
+            str = from_to(x - 5, y, +1, 0, 11); //horizontal
+            total += row_value(str, c);
+            str = from_to(x - 5, y - 5, +1, +1, 11); //diagonal
+            total += row_value(str, c);
+            str = from_to(x + 5, y - 5, -1, +1, 11); //diagonal
+            total += row_value(str, c);
         }
         sq[x][y] = "-"; // undo move
         return total;
-     }
-
+    }
     function from_to(x, y, step_x, step_y, len) {
-        var k, ref, str;
-        str = "";
-        for (k = 0, ref = len; (0 <= ref ? k < ref : k > ref); 0 <= ref ? ++k : --k) {
-          if ((x >= 0 && x < size) && (y >= 0 && y < size)) {
-            str += sq[x][y];
-          }
-          x += step_x;
-          y += step_y;
+        let str = "";
+        for (let i = 0; i < len; i++) {
+            if ((x >= 0 && x < size) && (y >= 0 && y < size)) {
+                str += sq[x][y];
+            }
+            x += step_x;
+            y += step_y;
         }
         return str;
     }
-
     function row_value(str, c) {
-        var f, i;
+        let f, i;
         str = str.replace(/_/g, '-');
         f = (c === "O") ? 1 : 0;
         if ((i = str.search(c + c + c + c + c)) !== -1) {
-          return 100000 + f * 10000;
+            return 100000 + f * 10000;
         }
         if ((i = str.search(c + c + c + c)) !== -1) {
-          if (str[i - 1] === "-" && str[i + 4] === "-") {
-            return 10000 + f * 10000;
-          }
-          if (str[i - 1] === "-" || str[i + 4] === "-") {
-            return 900 + f * 500;
-          }
-          return 0;
+            if (str[i - 1] === "-" && str[i + 4] === "-") {
+                return 10000 + f * 10000;
+            }
+            if (str[i - 1] === "-" || str[i + 4] === "-") {
+                return 900 + f * 500;
+            }
+            return 0;
         }
         if ((i = str.search(c + c + c + "-" + c + "|" + c + "-" + c + c + c)) !== -1) {
-          return 800 + f * 500;
+            return 800 + f * 500;
         }
         if ((i = str.search(c + c + c)) !== -1) {
-          if (str.slice(i - 2, i) === "--" && str.slice(i + 3, i + 5) === "--") {
-            return 1000 + f * 1000;
-          }
-          if (str.slice(i - 2, i) === "--" || str.slice(i + 3, i + 5) === "--") {
-            return 300 + f * 100;
-          }
-          return 0;
+            if (str.slice(i - 2, i) === "--" && str.slice(i + 3, i + 5) === "--") {
+                return 1000 + f * 1000;
+            }
+            if (str.slice(i - 2, i) === "--" || str.slice(i + 3, i + 5) === "--") {
+                return 300 + f * 100;
+            }
+            return 0;
         }
         if ((i = str.search(c + c + '-' + c)) !== -1 || (i = str.search(c + '-' + c + c)) !== -1) {
-          if (str.slice(i - 2, i) === "--" && str.slice(i + 4, i + 6) === "--") {
-            return 800 + f * 100;
-          }
-          if (str.slice(i - 2, i) === "--" || str.slice(i + 4, i + 6) === "--") {
-            return 500 + f * 100;
-          }
-          return 0;
+            if (str.slice(i - 2, i) === "--" && str.slice(i + 4, i + 6) === "--") {
+                return 800 + f * 100;
+            }
+            if (str.slice(i - 2, i) === "--" || str.slice(i + 4, i + 6) === "--") {
+                return 500 + f * 100;
+            }
+            return 0;
         }
         if ((i = str.search('--' + c + c + '--')) !== -1) {
-          return 100 + f * 100;
+            return 100 + f * 100;
         }
         return 0;
     }
-
     /* --- End of AI ------- */
-
-    function checkFive (x, y, squares) {
-        var i, str, xs, ys;
-
+    function checkFive(x, y, squares) {
+        let i, str, xs, ys;
         if (x === -1)
             return []; // not played yet
-
-        sq = squares.slice();  
-
+        sq = squares.slice();
         let c = sq[x][y]; // last played (X or O)
-
-        //console.log("c: " + c);
-
         let winner_row = [];
-        
         xs = x - 5;
         if (xs < 0) {
-          xs = 0;
+            xs = 0;
         }
         ys = y - 5;
         if (ys < 0) {
-          ys = 0;
+            ys = 0;
         }
         str = from_to(x, y - 5, 0, +1, 11); //vertical
         if ((i = str.search(c + c + c + c + c)) !== -1) {
-          winner_row = [x, ys + i, x, ys + i + 4];
+            winner_row = [x, ys + i, x, ys + i + 4];
         }
         str = from_to(x - 5, y, +1, 0, 11); //horizontal
         if ((i = str.search(c + c + c + c + c)) !== -1) {
-          winner_row = [xs + i, y, xs + i + 4, y];
+            winner_row = [xs + i, y, xs + i + 4, y];
         }
         if ((x - 5) <= 0 || (y - 5) <= 0) {
-          xs = x > y ? x - y : 0;
-          ys = y > x ? y - x : 0;
+            xs = x > y ? x - y : 0;
+            ys = y > x ? y - x : 0;
         }
         str = from_to(x - 5, y - 5, +1, +1, 11); //diagonal
         if ((i = str.search(c + c + c + c + c)) !== -1) {
-          winner_row = [xs + i, ys + i, xs + i + 4, ys + i + 4];
+            winner_row = [xs + i, ys + i, xs + i + 4, ys + i + 4];
         }
         xs = x + 5;
         ys = y - 5 < 0 ? 0 : y - 5;
         if ((x + 5) >= 19 || (y - 5) <= 0) {
-          xs = (19 - x) > y ? x + y : 19;
-          ys = y > (19 - x) ? y - (19 - x) : 0;
+            xs = (19 - x) > y ? x + y : 19;
+            ys = y > (19 - x) ? y - (19 - x) : 0;
         }
         str = from_to(x + 5, y - 5, -1, +1, 11); //diagonal
         if ((i = str.search(c + c + c + c + c)) !== -1) {
-          winner_row = [xs - i, ys + i, xs - i - 4, ys + i + 4];
+            winner_row = [xs - i, ys + i, xs - i - 4, ys + i + 4];
         }
-        
-        return winnerLineAllSquares(winner_row);    
-        
-      }
-
+        return winnerLineAllSquares(winner_row);
+    }
     function winnerLineAllSquares(line) {
-
+        console.log('blaa', line);
         if (line.length !== 4)
             return [];
-
         let x_step = 0;
-
         if (line[2] - line[0] > 0)
             x_step = +1;
-        
         if (line[2] - line[0] < 0)
             x_step = -1;
-        
         let y_step = 0;
-
         if (line[3] - line[1] > 0)
             y_step = +1;
-        
         if (line[3] - line[1] < 0)
             y_step = -1;
-
         let wLine = [line[0], line[1]];
-        
-        for (let k = 2; k < 8; k+=2 ) {
-            wLine[k]   = wLine[k-2] + x_step;
-            wLine[k+1] = wLine[k-1] + y_step;
+        for (let k = 2; k < 8; k += 2) {
+            wLine[k] = wLine[k - 2] + x_step;
+            wLine[k + 1] = wLine[k - 1] + y_step;
         }
-
         wLine[8] = line[2];
         wLine[9] = line[3];
-
         return wLine;
-
     }
-
     function checkDraw(squares) {
-
-      let moves = [];
-      sq = squares.slice();
-      size = sq.length;
-
-      for(var i = 0; i < sq.length; i++) {
-          var row = sq[i];
-          for(var j = 0; j < row.length; j++) {
-              if (sq[i][j] === '-')
-                  moves.push({value: 0, move: [i,j]});
-          }
-      }
-
-      if (moves.length === 0)
-        return true;
-      else
-        return false;
-      
+        let moves = [];
+        sq = squares.slice();
+        size = sq.length;
+        for (var i = 0; i < sq.length; i++) {
+            var row = sq[i];
+            for (var j = 0; j < row.length; j++) {
+                if (sq[i][j] === '-')
+                    moves.push({ value: 0, move: [i, j] });
+            }
+        }
+        if (moves.length === 0)
+            return true;
+        else
+            return false;
     }
 
     var AI = /*#__PURE__*/Object.freeze({
@@ -806,8 +775,8 @@ var app = (function () {
         }
     );
 
-    /* src/Square.svelte generated by Svelte v3.55.0 */
-    const file$3 = "src/Square.svelte";
+    /* src\Square.svelte generated by Svelte v3.55.0 */
+    const file$3 = "src\\Square.svelte";
 
     // (19:4) {#if text === 'X'}
     function create_if_block_1(ctx) {
@@ -827,7 +796,7 @@ var app = (function () {
     			attr_dev(line0, "y2", "80%");
     			attr_dev(line0, "class", "svelte-14ulk1k");
     			toggle_class(line0, "anim", /*anim*/ ctx[2]);
-    			add_location(line0, file$3, 19, 8, 675);
+    			add_location(line0, file$3, 19, 8, 743);
     			attr_dev(line1, "opacity", "0.6");
     			attr_dev(line1, "stroke", /*$gameMarkColor*/ ctx[6]);
     			attr_dev(line1, "stroke-width", "12%");
@@ -837,7 +806,7 @@ var app = (function () {
     			attr_dev(line1, "y2", "80%");
     			attr_dev(line1, "class", "svelte-14ulk1k");
     			toggle_class(line1, "anim", /*anim*/ ctx[2]);
-    			add_location(line1, file$3, 20, 8, 808);
+    			add_location(line1, file$3, 20, 8, 877);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, line0, anchor);
@@ -893,7 +862,7 @@ var app = (function () {
     			attr_dev(circle, "r", "30%");
     			attr_dev(circle, "class", "svelte-14ulk1k");
     			toggle_class(circle, "anim", /*anim*/ ctx[2]);
-    			add_location(circle, file$3, 23, 8, 978);
+    			add_location(circle, file$3, 23, 8, 1050);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, circle, anchor);
@@ -948,16 +917,16 @@ var app = (function () {
     			attr_dev(animate, "values", "blue;green;blue");
     			attr_dev(animate, "dur", "0.5s");
     			attr_dev(animate, "repeatCount", "1");
-    			add_location(animate, file$3, 12, 0, 314);
+    			add_location(animate, file$3, 12, 0, 360);
     			attr_dev(svg, "viewBox", "0 0 32 32");
     			attr_dev(svg, "xmlns", "http://www.w3.org/2000/svg");
-    			add_location(svg, file$3, 17, 4, 582);
+    			add_location(svg, file$3, 17, 4, 648);
     			attr_dev(button, "class", "square svelte-14ulk1k");
     			set_style(button, "width", /*size*/ ctx[3] + "px");
     			set_style(button, "height", /*size*/ ctx[3] + "px");
     			set_style(button, "background", /*$gameBackground*/ ctx[4]);
     			set_style(button, "border-color", /*$gameLineColor*/ ctx[5]);
-    			add_location(button, file$3, 16, 0, 434);
+    			add_location(button, file$3, 16, 0, 484);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -975,11 +944,11 @@ var app = (function () {
     				dispose = listen_dev(
     					button,
     					"click",
-    					function () {
+    					prevent_default(function () {
     						if (is_function(/*onClick*/ ctx[1])) /*onClick*/ ctx[1].apply(this, arguments);
-    					},
+    					}),
     					false,
-    					false,
+    					true,
     					false
     				);
 
@@ -1173,10 +1142,10 @@ var app = (function () {
     	}
     }
 
-    /* src/Resizebutton.svelte generated by Svelte v3.55.0 */
+    /* src\Resizebutton.svelte generated by Svelte v3.55.0 */
 
     const { console: console_1$2 } = globals;
-    const file$2 = "src/Resizebutton.svelte";
+    const file$2 = "src\\Resizebutton.svelte";
 
     function create_fragment$2(ctx) {
     	let button;
@@ -1201,7 +1170,7 @@ var app = (function () {
     			attr_dev(line0, "y1", "90%");
     			attr_dev(line0, "x2", "90%");
     			attr_dev(line0, "y2", "10%");
-    			add_location(line0, file$2, 33, 8, 1154);
+    			add_location(line0, file$2, 33, 8, 1187);
     			attr_dev(line1, "opacity", "0.6");
     			attr_dev(line1, "stroke", /*$gameBackground*/ ctx[2]);
     			attr_dev(line1, "stroke-width", "12%");
@@ -1209,7 +1178,7 @@ var app = (function () {
     			attr_dev(line1, "y1", "90%");
     			attr_dev(line1, "x2", "90%");
     			attr_dev(line1, "y2", "40%");
-    			add_location(line1, file$2, 34, 8, 1265);
+    			add_location(line1, file$2, 34, 8, 1299);
     			attr_dev(line2, "opacity", "0.6");
     			attr_dev(line2, "stroke", /*$gameBackground*/ ctx[2]);
     			attr_dev(line2, "stroke-width", "12%");
@@ -1217,17 +1186,17 @@ var app = (function () {
     			attr_dev(line2, "y1", "90%");
     			attr_dev(line2, "x2", "90%");
     			attr_dev(line2, "y2", "70%");
-    			add_location(line2, file$2, 35, 8, 1376);
+    			add_location(line2, file$2, 35, 8, 1411);
     			attr_dev(svg, "viewBox", "0 0 24 24");
     			attr_dev(svg, "xmlns", "http://www.w3.org/2000/svg");
-    			add_location(svg, file$2, 30, 4, 909);
+    			add_location(svg, file$2, 30, 4, 939);
     			set_style(button, "top", /*top*/ ctx[0] + 8 + "px");
     			set_style(button, "left", /*left*/ ctx[1] + 8 + "px");
     			set_style(button, "color", /*$gameBackground*/ ctx[2]);
     			set_style(button, "width", 12 + "px");
     			set_style(button, "height", 12 + "px");
     			attr_dev(button, "class", "svelte-1xx9mh4");
-    			add_location(button, file$2, 29, 0, 777);
+    			add_location(button, file$2, 29, 0, 806);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -3432,11 +3401,11 @@ var app = (function () {
 
     var axios = axios_1;
 
-    /* src/Game.svelte generated by Svelte v3.55.0 */
+    /* src\Game.svelte generated by Svelte v3.55.0 */
 
     const { console: console_1$1 } = globals;
 
-    const file$1 = "src/Game.svelte";
+    const file$1 = "src\\Game.svelte";
 
     function get_each_context(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -3476,7 +3445,7 @@ var app = (function () {
     			attr_dev(animate, "attributeName", "stroke");
     			attr_dev(animate, "dur", "0.5s");
     			attr_dev(animate, "repeatCount", "5");
-    			add_location(animate, file$1, 174, 12, 6109);
+    			add_location(animate, file$1, 174, 12, 6292);
     			attr_dev(line_1, "class", "path--");
     			attr_dev(line_1, "x1", line_1_x__value = /*line*/ ctx[4][0]);
     			attr_dev(line_1, "y1", line_1_y__value = /*line*/ ctx[4][1]);
@@ -3486,11 +3455,11 @@ var app = (function () {
     			attr_dev(line_1, "opacity", "0.6");
     			attr_dev(line_1, "stroke-width", line_1_stroke_width_value = /*squareSize*/ ctx[6] / 3);
     			attr_dev(line_1, "stroke-linecap", "round");
-    			add_location(line_1, file$1, 171, 8, 5896);
+    			add_location(line_1, file$1, 171, 8, 6076);
     			attr_dev(svg, "height", svg_height_value = /*bSize*/ ctx[0] * /*squareSize*/ ctx[6]);
     			attr_dev(svg, "width", svg_width_value = /*bSize*/ ctx[0] * /*squareSize*/ ctx[6]);
     			attr_dev(svg, "class", "svelte-1ag8sq8");
-    			add_location(svg, file$1, 170, 4, 5827);
+    			add_location(svg, file$1, 170, 4, 6006);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, svg, anchor);
@@ -3646,7 +3615,7 @@ var app = (function () {
     			}
 
     			attr_dev(div, "class", "board-row svelte-1ag8sq8");
-    			add_location(div, file$1, 183, 2, 6646);
+    			add_location(div, file$1, 183, 2, 6838);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -3777,7 +3746,7 @@ var app = (function () {
     			set_style(div, "background-color", /*$gameBackground*/ ctx[9]);
     			set_style(div, "width", /*bSize*/ ctx[0] * /*squareSize*/ ctx[6] + 39 + "px");
     			set_style(div, "border-color", /*borderColor*/ ctx[8]);
-    			add_location(div, file$1, 168, 0, 5652);
+    			add_location(div, file$1, 168, 0, 5829);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -3912,7 +3881,7 @@ var app = (function () {
     	validate_slots('Game', slots, []);
     	let { winner = '' } = $$props;
     	let { bSize = 15 } = $$props;
-    	let squares = Array(bSize).fill().map(() => Array(bSize).fill("-"));
+    	let squares = Array(bSize).fill(null).map(() => Array(bSize).fill("-"));
     	let winnerLine = [];
     	let lastMove = { x: 0, y: 0 };
     	let visible = false;
@@ -4002,8 +3971,9 @@ var app = (function () {
     	let count = 0;
 
     	function doMove(move) {
-    		console.log(move.x + ", " + move.y);
+    		//console.log(move.x + ", " + move.y)
     		$$invalidate(2, squares[move.x][move.y] = move.mark, squares);
+
     		$$invalidate(3, lastMove = { x: move.x, y: move.y });
     		$$invalidate(15, winnerLine = checkFive(move.x, move.y, squares));
     		if (winnerLine.length > 0) return;
@@ -4038,7 +4008,7 @@ var app = (function () {
 
     	function newGame(size = 15) {
     		$$invalidate(0, bSize = size);
-    		$$invalidate(2, squares = Array(bSize).fill().map(() => Array(bSize).fill("-")));
+    		$$invalidate(2, squares = Array(bSize).fill(null).map(() => Array(bSize).fill("-")));
     		$$invalidate(15, winnerLine = []);
     		$$invalidate(1, winner = '');
     		humanPlaysFirstMove = humanPlaysFirstMove ? false : true;
@@ -4261,10 +4231,10 @@ var app = (function () {
     	}
     }
 
-    /* src/App.svelte generated by Svelte v3.55.0 */
+    /* src\App.svelte generated by Svelte v3.55.0 */
 
     const { console: console_1 } = globals;
-    const file = "src/App.svelte";
+    const file = "src\\App.svelte";
 
     function create_fragment(ctx) {
     	let meta;
@@ -4427,87 +4397,87 @@ var app = (function () {
     			document.title = "Ristinolla";
     			attr_dev(meta, "name", "robots");
     			attr_dev(meta, "content", "noindex nofollow");
-    			add_location(meta, file, 34, 1, 836);
+    			add_location(meta, file, 34, 1, 870);
     			attr_dev(html, "lang", "fi");
-    			add_location(html, file, 35, 1, 887);
+    			add_location(html, file, 35, 1, 922);
     			attr_dev(h10, "class", "svelte-1oqvegt");
-    			add_location(h10, file, 39, 1, 944);
+    			add_location(h10, file, 39, 1, 983);
     			attr_dev(div0, "class", "header svelte-1oqvegt");
-    			add_location(div0, file, 38, 0, 922);
+    			add_location(div0, file, 38, 0, 960);
     			attr_dev(legend, "class", "svelte-1oqvegt");
-    			add_location(legend, file, 45, 3, 1069);
+    			add_location(legend, file, 45, 3, 1114);
     			attr_dev(th0, "class", "svelte-1oqvegt");
-    			add_location(th0, file, 48, 6, 1142);
+    			add_location(th0, file, 48, 6, 1190);
     			attr_dev(th1, "class", "svelte-1oqvegt");
-    			add_location(th1, file, 49, 6, 1159);
+    			add_location(th1, file, 49, 6, 1208);
     			attr_dev(tr0, "class", "svelte-1oqvegt");
-    			add_location(tr0, file, 47, 4, 1131);
+    			add_location(tr0, file, 47, 4, 1178);
     			attr_dev(td0, "id", "xscore");
     			attr_dev(td0, "class", "scores svelte-1oqvegt");
-    			add_location(td0, file, 52, 6, 1195);
+    			add_location(td0, file, 52, 6, 1247);
     			attr_dev(td1, "id", "oscore");
     			attr_dev(td1, "class", "scores svelte-1oqvegt");
-    			add_location(td1, file, 53, 6, 1247);
+    			add_location(td1, file, 53, 6, 1300);
     			attr_dev(tr1, "class", "svelte-1oqvegt");
-    			add_location(tr1, file, 51, 4, 1184);
+    			add_location(tr1, file, 51, 4, 1235);
     			attr_dev(table, "class", "scores svelte-1oqvegt");
-    			add_location(table, file, 46, 3, 1104);
+    			add_location(table, file, 46, 3, 1150);
     			attr_dev(br, "class", "svelte-1oqvegt");
-    			add_location(br, file, 56, 3, 1318);
+    			add_location(br, file, 56, 3, 1374);
     			attr_dev(p0, "class", "svelte-1oqvegt");
-    			add_location(p0, file, 57, 3, 1326);
+    			add_location(p0, file, 57, 3, 1383);
     			attr_dev(fieldset, "class", "svelte-1oqvegt");
-    			add_location(fieldset, file, 44, 2, 1055);
+    			add_location(fieldset, file, 44, 2, 1099);
     			button0.disabled = button0_disabled_value = /*win*/ ctx[0] !== '' ? false : true;
     			attr_dev(button0, "class", "svelte-1oqvegt");
-    			add_location(button0, file, 60, 2, 1453);
+    			add_location(button0, file, 60, 2, 1513);
     			attr_dev(button1, "class", "svelte-1oqvegt");
-    			add_location(button1, file, 61, 2, 1566);
+    			add_location(button1, file, 61, 2, 1627);
     			attr_dev(div1, "class", "left svelte-1oqvegt");
     			set_style(div1, "background", /*color2*/ ctx[4] + "55");
     			set_style(div1, "color", "black");
-    			add_location(div1, file, 43, 1, 982);
+    			add_location(div1, file, 43, 1, 1025);
     			attr_dev(div2, "class", "middle svelte-1oqvegt");
-    			add_location(div2, file, 64, 1, 1638);
+    			add_location(div2, file, 64, 1, 1702);
     			attr_dev(h11, "class", "svelte-1oqvegt");
-    			add_location(h11, file, 69, 2, 1846);
+    			add_location(h11, file, 69, 2, 1915);
     			attr_dev(input0, "type", "color");
     			attr_dev(input0, "id", "head");
     			attr_dev(input0, "name", "head");
     			attr_dev(input0, "class", "svelte-1oqvegt");
-    			add_location(input0, file, 71, 3, 1876);
+    			add_location(input0, file, 71, 3, 1947);
     			attr_dev(label0, "for", "head");
     			attr_dev(label0, "class", "svelte-1oqvegt");
-    			add_location(label0, file, 73, 3, 1946);
+    			add_location(label0, file, 73, 3, 2019);
     			attr_dev(div3, "class", "svelte-1oqvegt");
-    			add_location(div3, file, 70, 2, 1867);
+    			add_location(div3, file, 70, 2, 1937);
     			attr_dev(input1, "type", "color");
     			attr_dev(input1, "id", "body");
     			attr_dev(input1, "name", "body");
     			attr_dev(input1, "class", "svelte-1oqvegt");
-    			add_location(input1, file, 76, 3, 2001);
+    			add_location(input1, file, 76, 3, 2077);
     			attr_dev(label1, "for", "body");
     			attr_dev(label1, "class", "svelte-1oqvegt");
-    			add_location(label1, file, 78, 3, 2071);
+    			add_location(label1, file, 78, 3, 2149);
     			attr_dev(div4, "class", "svelte-1oqvegt");
-    			add_location(div4, file, 75, 2, 1992);
+    			add_location(div4, file, 75, 2, 2067);
     			attr_dev(p1, "class", "svelte-1oqvegt");
-    			add_location(p1, file, 80, 2, 2114);
+    			add_location(p1, file, 80, 2, 2194);
     			attr_dev(button2, "class", "svelte-1oqvegt");
-    			add_location(button2, file, 81, 2, 2138);
+    			add_location(button2, file, 81, 2, 2219);
     			attr_dev(button3, "class", "svelte-1oqvegt");
-    			add_location(button3, file, 82, 2, 2224);
+    			add_location(button3, file, 82, 2, 2306);
     			attr_dev(input2, "type", "range");
     			attr_dev(input2, "min", "5");
     			attr_dev(input2, "max", "30");
     			attr_dev(input2, "class", "svelte-1oqvegt");
-    			add_location(input2, file, 83, 2, 2310);
+    			add_location(input2, file, 83, 2, 2393);
     			attr_dev(div5, "class", "right svelte-1oqvegt");
     			set_style(div5, "background", /*color2*/ ctx[4] + "55");
     			set_style(div5, "color", "black");
-    			add_location(div5, file, 68, 1, 1772);
+    			add_location(div5, file, 68, 1, 1840);
     			attr_dev(main, "class", "svelte-1oqvegt");
-    			add_location(main, file, 42, 0, 974);
+    			add_location(main, file, 42, 0, 1016);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");

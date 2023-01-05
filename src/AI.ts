@@ -1,8 +1,8 @@
 
-let sq;
-let size;
+let sq: string[][];
+let size: number;
 
-export function playMove(squares) {
+export function playMove(squares: string[][]) {
 
     let moves = [];
     sq = squares.slice();
@@ -24,16 +24,13 @@ export function playMove(squares) {
     return {x: moves[0].move[0], y:  moves[0].move[1]};
 }
 
-function squareValue2(x, y) {
-    return Math.floor(Math.random() * 10000);
-}
-
-function squareValue(x, y) {
-    var c, k, len1, ref, str, total;
-    total = 0;
-    ref = ["X", "O"];
-    for (k = 0, len1 = ref.length; k < len1; k++) {
-      c = ref[k];
+function squareValue(x: number, y: number) {
+    let str = '';
+    let total = 0;
+    const chars = ["X", "O"];
+    
+    for (const c of chars) {
+      //c = ref[k];
       sq[x][y] = c;
       str = from_to(x, y - 5, 0, +1, 11); //vertical
       total += row_value(str, c);
@@ -48,23 +45,27 @@ function squareValue(x, y) {
     return total;
  }
 
-function from_to(x, y, step_x, step_y, len) {
-    var i, k, ref, str;
-    str = "";
-    for (i = k = 0, ref = len; (0 <= ref ? k < ref : k > ref); i = 0 <= ref ? ++k : --k) {
+function from_to(x: number, y: number, step_x: number, step_y: number, len: number) {
+  
+    let str = ""
+
+    for (let i = 0; i < len; i++) {
       if ((x >= 0 && x < size) && (y >= 0 && y < size)) {
         str += sq[x][y];
       }
       x += step_x;
       y += step_y;
     }
+
     return str;
 }
 
-function row_value(str, c) {
-    var f, i;
+function row_value(str: string, c: string) {
+    let f: number, i: number;
+    
     str = str.replace(/_/g, '-');
     f = (c === "O") ? 1 : 0;
+
     if ((i = str.search(c + c + c + c + c)) !== -1) {
       return 100000 + f * 10000;
     }
@@ -106,8 +107,8 @@ function row_value(str, c) {
 
 /* --- End of AI ------- */
 
-export function checkFive (x, y, squares) {
-    var i, str, xs, ys;
+export function checkFive (x: number, y: number, squares: string[][]) {
+    let i: number, str: string, xs: number, ys: number;
 
     if (x === -1)
         return []; // not played yet
@@ -115,8 +116,6 @@ export function checkFive (x, y, squares) {
     sq = squares.slice();  
 
     let c = sq[x][y]; // last played (X or O)
-
-    //console.log("c: " + c);
 
     let winner_row = [];
     
@@ -128,6 +127,7 @@ export function checkFive (x, y, squares) {
     if (ys < 0) {
       ys = 0;
     }
+
     str = from_to(x, y - 5, 0, +1, 11); //vertical
     if ((i = str.search(c + c + c + c + c)) !== -1) {
       winner_row = [x, ys + i, x, ys + i + 4];
@@ -136,6 +136,7 @@ export function checkFive (x, y, squares) {
     if ((i = str.search(c + c + c + c + c)) !== -1) {
       winner_row = [xs + i, y, xs + i + 4, y];
     }
+
     if ((x - 5) <= 0 || (y - 5) <= 0) {
       xs = x > y ? x - y : 0;
       ys = y > x ? y - x : 0;
@@ -144,6 +145,7 @@ export function checkFive (x, y, squares) {
     if ((i = str.search(c + c + c + c + c)) !== -1) {
       winner_row = [xs + i, ys + i, xs + i + 4, ys + i + 4];
     }
+    
     xs = x + 5;
     ys = y - 5 < 0 ? 0 : y - 5;
     if ((x + 5) >= 19 || (y - 5) <= 0) {
@@ -159,7 +161,9 @@ export function checkFive (x, y, squares) {
     
   }
 
-function winnerLineAllSquares(line) {
+function winnerLineAllSquares(line: number[]) {
+
+    console.log('blaa', line)
 
     if (line.length !== 4)
         return [];
@@ -194,7 +198,7 @@ function winnerLineAllSquares(line) {
 
 }
 
-export function checkDraw(squares) {
+export function checkDraw(squares: string[][]) {
 
   let moves = [];
   sq = squares.slice();
