@@ -5,6 +5,12 @@ var app = (function () {
 
     function noop() { }
     const identity = x => x;
+    function assign(tar, src) {
+        // @ts-ignore
+        for (const k in src)
+            tar[k] = src[k];
+        return tar;
+    }
     function add_location(element, file, line, column, char) {
         element.__svelte_meta = {
             loc: { file, line, column, char }
@@ -43,6 +49,55 @@ var app = (function () {
     function component_subscribe(component, store, callback) {
         component.$$.on_destroy.push(subscribe(store, callback));
     }
+    function create_slot(definition, ctx, $$scope, fn) {
+        if (definition) {
+            const slot_ctx = get_slot_context(definition, ctx, $$scope, fn);
+            return definition[0](slot_ctx);
+        }
+    }
+    function get_slot_context(definition, ctx, $$scope, fn) {
+        return definition[1] && fn
+            ? assign($$scope.ctx.slice(), definition[1](fn(ctx)))
+            : $$scope.ctx;
+    }
+    function get_slot_changes(definition, $$scope, dirty, fn) {
+        if (definition[2] && fn) {
+            const lets = definition[2](fn(dirty));
+            if ($$scope.dirty === undefined) {
+                return lets;
+            }
+            if (typeof lets === 'object') {
+                const merged = [];
+                const len = Math.max($$scope.dirty.length, lets.length);
+                for (let i = 0; i < len; i += 1) {
+                    merged[i] = $$scope.dirty[i] | lets[i];
+                }
+                return merged;
+            }
+            return $$scope.dirty | lets;
+        }
+        return $$scope.dirty;
+    }
+    function update_slot_base(slot, slot_definition, ctx, $$scope, slot_changes, get_slot_context_fn) {
+        if (slot_changes) {
+            const slot_context = get_slot_context(slot_definition, ctx, $$scope, get_slot_context_fn);
+            slot.p(slot_context, slot_changes);
+        }
+    }
+    function get_all_dirty_from_scope($$scope) {
+        if ($$scope.ctx.length > 32) {
+            const dirty = [];
+            const length = $$scope.ctx.length / 32;
+            for (let i = 0; i < length; i++) {
+                dirty[i] = -1;
+            }
+            return dirty;
+        }
+        return -1;
+    }
+    function null_to_empty(value) {
+        return value == null ? '' : value;
+    }
     function append(target, node) {
         target.appendChild(node);
     }
@@ -50,7 +105,9 @@ var app = (function () {
         target.insertBefore(node, anchor || null);
     }
     function detach(node) {
-        node.parentNode.removeChild(node);
+        if (node.parentNode) {
+            node.parentNode.removeChild(node);
+        }
     }
     function destroy_each(iterations, detaching) {
         for (let i = 0; i < iterations.length; i += 1) {
@@ -103,9 +160,9 @@ var app = (function () {
     function toggle_class(element, name, toggle) {
         element.classList[toggle ? 'add' : 'remove'](name);
     }
-    function custom_event(type, detail, bubbles = false) {
+    function custom_event(type, detail, { bubbles = false, cancelable = false } = {}) {
         const e = document.createEvent('CustomEvent');
-        e.initCustomEvent(type, bubbles, false, detail);
+        e.initCustomEvent(type, bubbles, cancelable, detail);
         return e;
     }
 
@@ -118,14 +175,74 @@ var app = (function () {
             throw new Error('Function called outside component initialization');
         return current_component;
     }
+    /**
+     * Schedules a callback to run immediately before the component is updated after any state change.
+     *
+     * The first time the callback runs will be before the initial `onMount`
+     *
+     * https://svelte.dev/docs#run-time-svelte-beforeupdate
+     */
     function beforeUpdate(fn) {
         get_current_component().$$.before_update.push(fn);
     }
+    /**
+     * The `onMount` function schedules a callback to run as soon as the component has been mounted to the DOM.
+     * It must be called during the component's initialisation (but doesn't need to live *inside* the component;
+     * it can be called from an external module).
+     *
+     * `onMount` does not run inside a [server-side component](/docs#run-time-server-side-component-api).
+     *
+     * https://svelte.dev/docs#run-time-svelte-onmount
+     */
     function onMount(fn) {
         get_current_component().$$.on_mount.push(fn);
     }
+    /**
+     * Schedules a callback to run immediately after the component has been updated.
+     *
+     * The first time the callback runs will be after the initial `onMount`
+     */
     function afterUpdate(fn) {
         get_current_component().$$.after_update.push(fn);
+    }
+    /**
+     * Schedules a callback to run immediately before the component is unmounted.
+     *
+     * Out of `onMount`, `beforeUpdate`, `afterUpdate` and `onDestroy`, this is the
+     * only one that runs inside a server-side component.
+     *
+     * https://svelte.dev/docs#run-time-svelte-ondestroy
+     */
+    function onDestroy(fn) {
+        get_current_component().$$.on_destroy.push(fn);
+    }
+    /**
+     * Creates an event dispatcher that can be used to dispatch [component events](/docs#template-syntax-component-directives-on-eventname).
+     * Event dispatchers are functions that can take two arguments: `name` and `detail`.
+     *
+     * Component events created with `createEventDispatcher` create a
+     * [CustomEvent](https://developer.mozilla.org/en-US/docs/Web/API/CustomEvent).
+     * These events do not [bubble](https://developer.mozilla.org/en-US/docs/Learn/JavaScript/Building_blocks/Events#Event_bubbling_and_capture).
+     * The `detail` argument corresponds to the [CustomEvent.detail](https://developer.mozilla.org/en-US/docs/Web/API/CustomEvent/detail)
+     * property and can contain any type of data.
+     *
+     * https://svelte.dev/docs#run-time-svelte-createeventdispatcher
+     */
+    function createEventDispatcher() {
+        const component = get_current_component();
+        return (type, detail, { cancelable = false } = {}) => {
+            const callbacks = component.$$.callbacks[type];
+            if (callbacks) {
+                // TODO are there situations where events could be dispatched
+                // in a server (non-DOM) environment?
+                const event = custom_event(type, detail, { cancelable });
+                callbacks.slice().forEach(fn => {
+                    fn.call(component, event);
+                });
+                return !event.defaultPrevented;
+            }
+            return true;
+        };
     }
 
     const dirty_components = [];
@@ -167,15 +284,29 @@ var app = (function () {
     const seen_callbacks = new Set();
     let flushidx = 0; // Do *not* move this inside the flush() function
     function flush() {
+        // Do not reenter flush while dirty components are updated, as this can
+        // result in an infinite loop. Instead, let the inner flush handle it.
+        // Reentrancy is ok afterwards for bindings etc.
+        if (flushidx !== 0) {
+            return;
+        }
         const saved_component = current_component;
         do {
             // first, call beforeUpdate functions
             // and update components
-            while (flushidx < dirty_components.length) {
-                const component = dirty_components[flushidx];
-                flushidx++;
-                set_current_component(component);
-                update(component.$$);
+            try {
+                while (flushidx < dirty_components.length) {
+                    const component = dirty_components[flushidx];
+                    flushidx++;
+                    set_current_component(component);
+                    update(component.$$);
+                }
+            }
+            catch (e) {
+                // reset dirty state to not end up in a deadlocked state and then rethrow
+                dirty_components.length = 0;
+                flushidx = 0;
+                throw e;
             }
             set_current_component(null);
             dirty_components.length = 0;
@@ -248,6 +379,9 @@ var app = (function () {
             });
             block.o(local);
         }
+        else if (callback) {
+            callback();
+        }
     }
 
     const globals = (typeof window !== 'undefined'
@@ -267,14 +401,17 @@ var app = (function () {
         block && block.c();
     }
     function mount_component(component, target, anchor, customElement) {
-        const { fragment, on_mount, on_destroy, after_update } = component.$$;
+        const { fragment, after_update } = component.$$;
         fragment && fragment.m(target, anchor);
         if (!customElement) {
             // onMount happens before the initial afterUpdate
             add_render_callback(() => {
-                const new_on_destroy = on_mount.map(run).filter(is_function);
-                if (on_destroy) {
-                    on_destroy.push(...new_on_destroy);
+                const new_on_destroy = component.$$.on_mount.map(run).filter(is_function);
+                // if the component was destroyed immediately
+                // it will update the `$$.on_destroy` reference to `null`.
+                // the destructured on_destroy may still reference to the old array
+                if (component.$$.on_destroy) {
+                    component.$$.on_destroy.push(...new_on_destroy);
                 }
                 else {
                     // Edge case - component was destroyed immediately,
@@ -310,7 +447,7 @@ var app = (function () {
         set_current_component(component);
         const $$ = component.$$ = {
             fragment: null,
-            ctx: null,
+            ctx: [],
             // state
             props,
             update: noop,
@@ -375,6 +512,9 @@ var app = (function () {
             this.$destroy = noop;
         }
         $on(type, callback) {
+            if (!is_function(callback)) {
+                return noop;
+            }
             const callbacks = (this.$$.callbacks[type] || (this.$$.callbacks[type] = []));
             callbacks.push(callback);
             return () => {
@@ -393,7 +533,7 @@ var app = (function () {
     }
 
     function dispatch_dev(type, detail) {
-        document.dispatchEvent(custom_event(type, Object.assign({ version: '3.47.0' }, detail), true));
+        document.dispatchEvent(custom_event(type, Object.assign({ version: '3.55.1' }, detail), { bubbles: true }));
     }
     function append_dev(target, node) {
         dispatch_dev('SvelteDOMInsert', { target, node });
@@ -818,8 +958,8 @@ var app = (function () {
         }
     );
 
-    /* src\Square.svelte generated by Svelte v3.47.0 */
-    const file$3 = "src\\Square.svelte";
+    /* src/Square.svelte generated by Svelte v3.55.1 */
+    const file$7 = "src/Square.svelte";
 
     // (25:4) {#if text === 'X'}
     function create_if_block_1(ctx) {
@@ -837,9 +977,9 @@ var app = (function () {
     			attr_dev(line0, "y1", "20%");
     			attr_dev(line0, "x2", "80%");
     			attr_dev(line0, "y2", "80%");
-    			attr_dev(line0, "class", "svelte-14ulk1k");
+    			attr_dev(line0, "class", "svelte-ebf7aa");
     			toggle_class(line0, "anim", /*anim*/ ctx[2]);
-    			add_location(line0, file$3, 25, 8, 734);
+    			add_location(line0, file$7, 25, 8, 709);
     			attr_dev(line1, "opacity", "0.6");
     			attr_dev(line1, "stroke", /*$gameMarkColor*/ ctx[6]);
     			attr_dev(line1, "stroke-width", "12%");
@@ -847,9 +987,9 @@ var app = (function () {
     			attr_dev(line1, "y1", "20%");
     			attr_dev(line1, "x2", "20%");
     			attr_dev(line1, "y2", "80%");
-    			attr_dev(line1, "class", "svelte-14ulk1k");
+    			attr_dev(line1, "class", "svelte-ebf7aa");
     			toggle_class(line1, "anim", /*anim*/ ctx[2]);
-    			add_location(line1, file$3, 26, 8, 868);
+    			add_location(line1, file$7, 26, 8, 842);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, line0, anchor);
@@ -903,9 +1043,9 @@ var app = (function () {
     			attr_dev(circle, "cx", "50%");
     			attr_dev(circle, "cy", "50%");
     			attr_dev(circle, "r", "30%");
-    			attr_dev(circle, "class", "svelte-14ulk1k");
+    			attr_dev(circle, "class", "svelte-ebf7aa");
     			toggle_class(circle, "anim", /*anim*/ ctx[2]);
-    			add_location(circle, file$3, 29, 8, 1041);
+    			add_location(circle, file$7, 29, 8, 1012);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, circle, anchor);
@@ -935,7 +1075,7 @@ var app = (function () {
     	return block;
     }
 
-    function create_fragment$3(ctx) {
+    function create_fragment$7(ctx) {
     	let animate;
     	let t;
     	let button;
@@ -960,16 +1100,16 @@ var app = (function () {
     			attr_dev(animate, "values", "blue;green;blue");
     			attr_dev(animate, "dur", "0.5s");
     			attr_dev(animate, "repeatCount", "1");
-    			add_location(animate, file$3, 18, 0, 366);
+    			add_location(animate, file$7, 18, 0, 348);
     			attr_dev(svg, "viewBox", "0 0 32 32");
     			attr_dev(svg, "xmlns", "http://www.w3.org/2000/svg");
-    			add_location(svg, file$3, 23, 4, 639);
-    			attr_dev(button, "class", "square svelte-14ulk1k");
+    			add_location(svg, file$7, 23, 4, 616);
+    			attr_dev(button, "class", "square svelte-ebf7aa");
     			set_style(button, "width", /*size*/ ctx[3] + "px");
     			set_style(button, "height", /*size*/ ctx[3] + "px");
     			set_style(button, "background", /*$gameBackground*/ ctx[4]);
     			set_style(button, "border-color", /*$gameLineColor*/ ctx[5]);
-    			add_location(button, file$3, 22, 0, 490);
+    			add_location(button, file$7, 22, 0, 468);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -1058,7 +1198,7 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$3.name,
+    		id: create_fragment$7.name,
     		type: "component",
     		source: "",
     		ctx
@@ -1067,7 +1207,7 @@ var app = (function () {
     	return block;
     }
 
-    function instance$3($$self, $$props, $$invalidate) {
+    function instance$7($$self, $$props, $$invalidate) {
     	let $gameBackground;
     	let $gameLineColor;
     	let $gameMarkColor;
@@ -1086,6 +1226,16 @@ var app = (function () {
 
     	//$: console.log($gameMarkColor);
     	let testValue = 2;
+
+    	$$self.$$.on_mount.push(function () {
+    		if (onClick === undefined && !('onClick' in $$props || $$self.$$.bound[$$self.$$.props['onClick']])) {
+    			console.warn("<Square> was created without expected prop 'onClick'");
+    		}
+
+    		if (size === undefined && !('size' in $$props || $$self.$$.bound[$$self.$$.props['size']])) {
+    			console.warn("<Square> was created without expected prop 'size'");
+    		}
+    	});
 
     	const writable_props = ['text', 'onClick', 'anim', 'size'];
 
@@ -1135,25 +1285,14 @@ var app = (function () {
     class Square extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$3, create_fragment$3, safe_not_equal, { text: 0, onClick: 1, anim: 2, size: 3 });
+    		init(this, options, instance$7, create_fragment$7, safe_not_equal, { text: 0, onClick: 1, anim: 2, size: 3 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Square",
     			options,
-    			id: create_fragment$3.name
+    			id: create_fragment$7.name
     		});
-
-    		const { ctx } = this.$$;
-    		const props = options.props || {};
-
-    		if (/*onClick*/ ctx[1] === undefined && !('onClick' in props)) {
-    			console.warn("<Square> was created without expected prop 'onClick'");
-    		}
-
-    		if (/*size*/ ctx[3] === undefined && !('size' in props)) {
-    			console.warn("<Square> was created without expected prop 'size'");
-    		}
     	}
 
     	get text() {
@@ -1189,12 +1328,12 @@ var app = (function () {
     	}
     }
 
-    /* src\Resizebutton.svelte generated by Svelte v3.47.0 */
+    /* src/Resizebutton.svelte generated by Svelte v3.55.1 */
 
     const { console: console_1$2 } = globals;
-    const file$2 = "src\\Resizebutton.svelte";
+    const file$6 = "src/Resizebutton.svelte";
 
-    function create_fragment$2(ctx) {
+    function create_fragment$6(ctx) {
     	let button;
     	let svg;
     	let line0;
@@ -1217,7 +1356,7 @@ var app = (function () {
     			attr_dev(line0, "y1", "90%");
     			attr_dev(line0, "x2", "90%");
     			attr_dev(line0, "y2", "10%");
-    			add_location(line0, file$2, 43, 8, 1187);
+    			add_location(line0, file$6, 43, 8, 1144);
     			attr_dev(line1, "opacity", "0.6");
     			attr_dev(line1, "stroke", /*$gameBackground*/ ctx[2]);
     			attr_dev(line1, "stroke-width", "12%");
@@ -1225,7 +1364,7 @@ var app = (function () {
     			attr_dev(line1, "y1", "90%");
     			attr_dev(line1, "x2", "90%");
     			attr_dev(line1, "y2", "40%");
-    			add_location(line1, file$2, 44, 8, 1299);
+    			add_location(line1, file$6, 44, 8, 1255);
     			attr_dev(line2, "opacity", "0.6");
     			attr_dev(line2, "stroke", /*$gameBackground*/ ctx[2]);
     			attr_dev(line2, "stroke-width", "12%");
@@ -1233,17 +1372,17 @@ var app = (function () {
     			attr_dev(line2, "y1", "90%");
     			attr_dev(line2, "x2", "90%");
     			attr_dev(line2, "y2", "70%");
-    			add_location(line2, file$2, 45, 8, 1411);
+    			add_location(line2, file$6, 45, 8, 1366);
     			attr_dev(svg, "viewBox", "0 0 24 24");
     			attr_dev(svg, "xmlns", "http://www.w3.org/2000/svg");
-    			add_location(svg, file$2, 40, 4, 939);
+    			add_location(svg, file$6, 40, 4, 899);
     			set_style(button, "top", /*top*/ ctx[0] + 8 + "px");
     			set_style(button, "left", /*left*/ ctx[1] + 8 + "px");
     			set_style(button, "color", /*$gameBackground*/ ctx[2]);
     			set_style(button, "width", 12 + "px");
     			set_style(button, "height", 12 + "px");
     			attr_dev(button, "class", "svelte-1xx9mh4");
-    			add_location(button, file$2, 39, 0, 806);
+    			add_location(button, file$6, 39, 0, 767);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -1296,7 +1435,7 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$2.name,
+    		id: create_fragment$6.name,
     		type: "component",
     		source: "",
     		ctx
@@ -1305,7 +1444,7 @@ var app = (function () {
     	return block;
     }
 
-    function instance$2($$self, $$props, $$invalidate) {
+    function instance$6($$self, $$props, $$invalidate) {
     	let $gameBackground;
     	validate_store(gameBackground, 'gameBackground');
     	component_subscribe($$self, gameBackground, $$value => $$invalidate(2, $gameBackground = $$value));
@@ -1388,13 +1527,13 @@ var app = (function () {
     class Resizebutton extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$2, create_fragment$2, safe_not_equal, { size: 5, top: 0, left: 1, resized: 4 });
+    		init(this, options, instance$6, create_fragment$6, safe_not_equal, { size: 5, top: 0, left: 1, resized: 4 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Resizebutton",
     			options,
-    			id: create_fragment$2.name
+    			id: create_fragment$6.name
     		});
     	}
 
@@ -3447,11 +3586,11 @@ var app = (function () {
 
     var axios = axios_1;
 
-    /* src\Game.svelte generated by Svelte v3.47.0 */
+    /* src/Game.svelte generated by Svelte v3.55.1 */
 
     const { console: console_1$1 } = globals;
 
-    const file$1 = "src\\Game.svelte";
+    const file$5 = "src/Game.svelte";
 
     function get_each_context(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -3491,7 +3630,7 @@ var app = (function () {
     			attr_dev(animate, "attributeName", "stroke");
     			attr_dev(animate, "dur", "0.5s");
     			attr_dev(animate, "repeatCount", "5");
-    			add_location(animate, file$1, 221, 12, 7289);
+    			add_location(animate, file$5, 221, 12, 7068);
     			attr_dev(line_1, "class", "path--");
     			attr_dev(line_1, "x1", line_1_x__value = /*line*/ ctx[4][0]);
     			attr_dev(line_1, "y1", line_1_y__value = /*line*/ ctx[4][1]);
@@ -3501,11 +3640,11 @@ var app = (function () {
     			attr_dev(line_1, "opacity", "0.6");
     			attr_dev(line_1, "stroke-width", line_1_stroke_width_value = /*squareSize*/ ctx[6] / 3);
     			attr_dev(line_1, "stroke-linecap", "round");
-    			add_location(line_1, file$1, 218, 8, 7073);
+    			add_location(line_1, file$5, 218, 8, 6855);
     			attr_dev(svg, "height", svg_height_value = /*bSize*/ ctx[0] * /*squareSize*/ ctx[6]);
     			attr_dev(svg, "width", svg_width_value = /*bSize*/ ctx[0] * /*squareSize*/ ctx[6]);
     			attr_dev(svg, "class", "svelte-1ag8sq8");
-    			add_location(svg, file$1, 217, 4, 7003);
+    			add_location(svg, file$5, 217, 4, 6786);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, svg, anchor);
@@ -3661,7 +3800,7 @@ var app = (function () {
     			}
 
     			attr_dev(div, "class", "board-row svelte-1ag8sq8");
-    			add_location(div, file$1, 230, 2, 7835);
+    			add_location(div, file$5, 230, 2, 7605);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -3736,7 +3875,7 @@ var app = (function () {
     	return block;
     }
 
-    function create_fragment$1(ctx) {
+    function create_fragment$5(ctx) {
     	let div;
     	let t0;
     	let t1;
@@ -3792,7 +3931,7 @@ var app = (function () {
     			set_style(div, "background-color", /*$gameBackground*/ ctx[9]);
     			set_style(div, "width", /*bSize*/ ctx[0] * /*squareSize*/ ctx[6] + 39 + "px");
     			set_style(div, "border-color", /*borderColor*/ ctx[8]);
-    			add_location(div, file$1, 215, 0, 6826);
+    			add_location(div, file$5, 215, 0, 6611);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -3906,7 +4045,7 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$1.name,
+    		id: create_fragment$5.name,
     		type: "component",
     		source: "",
     		ctx
@@ -3915,7 +4054,7 @@ var app = (function () {
     	return block;
     }
 
-    function instance$1($$self, $$props, $$invalidate) {
+    function instance$5($$self, $$props, $$invalidate) {
     	let squareSize;
     	let $gameBackground;
     	let $gameMarkColor;
@@ -4228,8 +4367,8 @@ var app = (function () {
     		init(
     			this,
     			options,
-    			instance$1,
-    			create_fragment$1,
+    			instance$5,
+    			create_fragment$5,
     			safe_not_equal,
     			{
     				winner: 1,
@@ -4245,7 +4384,7 @@ var app = (function () {
     			component: this,
     			tagName: "Game",
     			options,
-    			id: create_fragment$1.name
+    			id: create_fragment$5.name
     		});
     	}
 
@@ -4282,83 +4421,1495 @@ var app = (function () {
     	}
     }
 
-    /* src\App.svelte generated by Svelte v3.47.0 */
+    /* node_modules/svelte-switch/src/components/CheckedIcon.svelte generated by Svelte v3.55.1 */
+
+    const file$4 = "node_modules/svelte-switch/src/components/CheckedIcon.svelte";
+
+    function create_fragment$4(ctx) {
+    	let svg;
+    	let path;
+
+    	const block = {
+    		c: function create() {
+    			svg = svg_element("svg");
+    			path = svg_element("path");
+    			attr_dev(path, "d", "M11.264 0L5.26 6.004 2.103 2.847 0 4.95l5.26 5.26 8.108-8.107L11.264 0");
+    			attr_dev(path, "fill", "#fff");
+    			attr_dev(path, "fillrule", "evenodd");
+    			add_location(path, file$4, 5, 2, 105);
+    			attr_dev(svg, "height", "100%");
+    			attr_dev(svg, "width", "100%");
+    			attr_dev(svg, "viewBox", "-2 -5 17 21");
+    			set_style(svg, "position", "absolute");
+    			set_style(svg, "top", "0");
+    			add_location(svg, file$4, 0, 0, 0);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, svg, anchor);
+    			append_dev(svg, path);
+    		},
+    		p: noop,
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(svg);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$4.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$4($$self, $$props) {
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots('CheckedIcon', slots, []);
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<CheckedIcon> was created with unknown prop '${key}'`);
+    	});
+
+    	return [];
+    }
+
+    class CheckedIcon extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$4, create_fragment$4, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "CheckedIcon",
+    			options,
+    			id: create_fragment$4.name
+    		});
+    	}
+    }
+
+    /* node_modules/svelte-switch/src/components/UncheckedIcon.svelte generated by Svelte v3.55.1 */
+
+    const file$3 = "node_modules/svelte-switch/src/components/UncheckedIcon.svelte";
+
+    function create_fragment$3(ctx) {
+    	let svg;
+    	let path;
+
+    	const block = {
+    		c: function create() {
+    			svg = svg_element("svg");
+    			path = svg_element("path");
+    			attr_dev(path, "d", "M9.9 2.12L7.78 0 4.95 2.828 2.12 0 0 2.12l2.83 2.83L0 7.776 2.123 9.9\r\n    4.95 7.07 7.78 9.9 9.9 7.776 7.072 4.95 9.9 2.12");
+    			attr_dev(path, "fill", "#fff");
+    			attr_dev(path, "fillrule", "evenodd");
+    			add_location(path, file$3, 5, 2, 106);
+    			attr_dev(svg, "viewBox", "-2 -5 14 20");
+    			attr_dev(svg, "height", "100%");
+    			attr_dev(svg, "width", "100%");
+    			set_style(svg, "position", "absolute");
+    			set_style(svg, "top", "0");
+    			add_location(svg, file$3, 0, 0, 0);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, svg, anchor);
+    			append_dev(svg, path);
+    		},
+    		p: noop,
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(svg);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$3.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$3($$self, $$props) {
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots('UncheckedIcon', slots, []);
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<UncheckedIcon> was created with unknown prop '${key}'`);
+    	});
+
+    	return [];
+    }
+
+    class UncheckedIcon extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$3, create_fragment$3, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "UncheckedIcon",
+    			options,
+    			id: create_fragment$3.name
+    		});
+    	}
+    }
+
+    function createBackgroundColor(
+      pos,
+      checkedPos,
+      uncheckedPos,
+      offColor,
+      onColor
+    ) {
+      const relativePos = (pos - uncheckedPos) / (checkedPos - uncheckedPos);
+      if (relativePos === 0) {
+        return offColor;
+      }
+      if (relativePos === 1) {
+        return onColor;
+      }
+
+      let newColor = "#";
+      for (let i = 1; i < 6; i += 2) {
+        const offComponent = parseInt(offColor.substr(i, 2), 16);
+        const onComponent = parseInt(onColor.substr(i, 2), 16);
+        const weightedValue = Math.round(
+          (1 - relativePos) * offComponent + relativePos * onComponent
+        );
+        let newComponent = weightedValue.toString(16);
+        if (newComponent.length === 1) {
+          newComponent = `0${newComponent}`;
+        }
+        newColor += newComponent;
+      }
+      return newColor;
+    }
+
+    function convertShorthandColor(color) {
+      if (color.length === 7) {
+        return color;
+      }
+      let sixDigitColor = "#";
+      for (let i = 1; i < 4; i += 1) {
+        sixDigitColor += color[i] + color[i];
+      }
+      return sixDigitColor;
+    }
+
+    function getBackgroundColor(
+      pos,
+      checkedPos,
+      uncheckedPos,
+      offColor,
+      onColor
+    ) {
+      const sixDigitOffColor = convertShorthandColor(offColor);
+      const sixDigitOnColor = convertShorthandColor(onColor);
+      return createBackgroundColor(
+        pos,
+        checkedPos,
+        uncheckedPos,
+        sixDigitOffColor,
+        sixDigitOnColor
+      );
+    }
+
+    /* node_modules/svelte-switch/src/components/Switch.svelte generated by Svelte v3.55.1 */
+    const file$2 = "node_modules/svelte-switch/src/components/Switch.svelte";
+    const get_unCheckedIcon_slot_changes = dirty => ({});
+    const get_unCheckedIcon_slot_context = ctx => ({});
+    const get_checkedIcon_slot_changes = dirty => ({});
+    const get_checkedIcon_slot_context = ctx => ({});
+
+    // (313:31)           
+    function fallback_block_1(ctx) {
+    	let cicon;
+    	let current;
+    	cicon = new /*CIcon*/ ctx[18]({ $$inline: true });
+
+    	const block = {
+    		c: function create() {
+    			create_component(cicon.$$.fragment);
+    		},
+    		m: function mount(target, anchor) {
+    			mount_component(cicon, target, anchor);
+    			current = true;
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(cicon.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(cicon.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			destroy_component(cicon, detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: fallback_block_1.name,
+    		type: "fallback",
+    		source: "(313:31)           ",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (318:33)           
+    function fallback_block(ctx) {
+    	let uicon;
+    	let current;
+    	uicon = new /*UIcon*/ ctx[19]({ $$inline: true });
+
+    	const block = {
+    		c: function create() {
+    			create_component(uicon.$$.fragment);
+    		},
+    		m: function mount(target, anchor) {
+    			mount_component(uicon, target, anchor);
+    			current = true;
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(uicon.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(uicon.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			destroy_component(uicon, detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: fallback_block.name,
+    		type: "fallback",
+    		source: "(318:33)           ",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$2(ctx) {
+    	let div4;
+    	let div2;
+    	let div0;
+    	let t0;
+    	let div1;
+    	let t1;
+    	let div3;
+    	let t2;
+    	let input;
+    	let current;
+    	let mounted;
+    	let dispose;
+    	const checkedIcon_slot_template = /*#slots*/ ctx[35].checkedIcon;
+    	const checkedIcon_slot = create_slot(checkedIcon_slot_template, ctx, /*$$scope*/ ctx[34], get_checkedIcon_slot_context);
+    	const checkedIcon_slot_or_fallback = checkedIcon_slot || fallback_block_1(ctx);
+    	const unCheckedIcon_slot_template = /*#slots*/ ctx[35].unCheckedIcon;
+    	const unCheckedIcon_slot = create_slot(unCheckedIcon_slot_template, ctx, /*$$scope*/ ctx[34], get_unCheckedIcon_slot_context);
+    	const unCheckedIcon_slot_or_fallback = unCheckedIcon_slot || fallback_block(ctx);
+
+    	const block = {
+    		c: function create() {
+    			div4 = element("div");
+    			div2 = element("div");
+    			div0 = element("div");
+    			if (checkedIcon_slot_or_fallback) checkedIcon_slot_or_fallback.c();
+    			t0 = space();
+    			div1 = element("div");
+    			if (unCheckedIcon_slot_or_fallback) unCheckedIcon_slot_or_fallback.c();
+    			t1 = space();
+    			div3 = element("div");
+    			t2 = space();
+    			input = element("input");
+    			attr_dev(div0, "style", /*checkedIconStyle*/ ctx[5]);
+    			add_location(div0, file$2, 311, 4, 8377);
+    			attr_dev(div1, "style", /*uncheckedIconStyle*/ ctx[6]);
+    			add_location(div1, file$2, 316, 4, 8492);
+    			attr_dev(div2, "class", "react-switch-bg");
+    			attr_dev(div2, "style", /*backgroundStyle*/ ctx[4]);
+    			attr_dev(div2, "onmousedown", func);
+    			add_location(div2, file$2, 306, 2, 8223);
+    			attr_dev(div3, "class", "react-switch-handle");
+    			attr_dev(div3, "style", /*handleStyle*/ ctx[7]);
+    			add_location(div3, file$2, 322, 2, 8619);
+    			attr_dev(input, "type", "checkbox");
+    			attr_dev(input, "role", "switch");
+    			input.disabled = /*disabled*/ ctx[0];
+    			attr_dev(input, "style", /*inputStyle*/ ctx[8]);
+    			add_location(input, file$2, 331, 2, 8984);
+    			attr_dev(div4, "class", /*containerClass*/ ctx[1]);
+    			attr_dev(div4, "style", /*rootStyle*/ ctx[3]);
+    			add_location(div4, file$2, 305, 0, 8173);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div4, anchor);
+    			append_dev(div4, div2);
+    			append_dev(div2, div0);
+
+    			if (checkedIcon_slot_or_fallback) {
+    				checkedIcon_slot_or_fallback.m(div0, null);
+    			}
+
+    			append_dev(div2, t0);
+    			append_dev(div2, div1);
+
+    			if (unCheckedIcon_slot_or_fallback) {
+    				unCheckedIcon_slot_or_fallback.m(div1, null);
+    			}
+
+    			append_dev(div4, t1);
+    			append_dev(div4, div3);
+    			append_dev(div4, t2);
+    			append_dev(div4, input);
+    			/*input_binding*/ ctx[36](input);
+    			current = true;
+
+    			if (!mounted) {
+    				dispose = [
+    					listen_dev(
+    						div2,
+    						"click",
+    						function () {
+    							if (is_function(/*disabled*/ ctx[0] ? null : /*onClick*/ ctx[17])) (/*disabled*/ ctx[0] ? null : /*onClick*/ ctx[17]).apply(this, arguments);
+    						},
+    						false,
+    						false,
+    						false
+    					),
+    					listen_dev(div3, "click", click_handler, false, false, false),
+    					listen_dev(
+    						div3,
+    						"mousedown",
+    						function () {
+    							if (is_function(/*disabled*/ ctx[0] ? null : /*onMouseDown*/ ctx[9])) (/*disabled*/ ctx[0] ? null : /*onMouseDown*/ ctx[9]).apply(this, arguments);
+    						},
+    						false,
+    						false,
+    						false
+    					),
+    					listen_dev(
+    						div3,
+    						"touchstart",
+    						function () {
+    							if (is_function(/*disabled*/ ctx[0] ? null : /*onTouchStart*/ ctx[10])) (/*disabled*/ ctx[0] ? null : /*onTouchStart*/ ctx[10]).apply(this, arguments);
+    						},
+    						false,
+    						false,
+    						false
+    					),
+    					listen_dev(
+    						div3,
+    						"touchmove",
+    						function () {
+    							if (is_function(/*disabled*/ ctx[0] ? null : /*onTouchMove*/ ctx[11])) (/*disabled*/ ctx[0] ? null : /*onTouchMove*/ ctx[11]).apply(this, arguments);
+    						},
+    						false,
+    						false,
+    						false
+    					),
+    					listen_dev(
+    						div3,
+    						"touchend",
+    						function () {
+    							if (is_function(/*disabled*/ ctx[0] ? null : /*onTouchEnd*/ ctx[12])) (/*disabled*/ ctx[0] ? null : /*onTouchEnd*/ ctx[12]).apply(this, arguments);
+    						},
+    						false,
+    						false,
+    						false
+    					),
+    					listen_dev(
+    						div3,
+    						"touchcancel",
+    						function () {
+    							if (is_function(/*disabled*/ ctx[0] ? null : /*unsetHasOutline*/ ctx[16])) (/*disabled*/ ctx[0] ? null : /*unsetHasOutline*/ ctx[16]).apply(this, arguments);
+    						},
+    						false,
+    						false,
+    						false
+    					),
+    					listen_dev(input, "focus", /*setHasOutline*/ ctx[15], false, false, false),
+    					listen_dev(input, "blur", /*unsetHasOutline*/ ctx[16], false, false, false),
+    					listen_dev(input, "keyup", /*onKeyUp*/ ctx[14], false, false, false),
+    					listen_dev(input, "change", /*onInputChange*/ ctx[13], false, false, false)
+    				];
+
+    				mounted = true;
+    			}
+    		},
+    		p: function update(new_ctx, dirty) {
+    			ctx = new_ctx;
+
+    			if (checkedIcon_slot) {
+    				if (checkedIcon_slot.p && (!current || dirty[1] & /*$$scope*/ 8)) {
+    					update_slot_base(
+    						checkedIcon_slot,
+    						checkedIcon_slot_template,
+    						ctx,
+    						/*$$scope*/ ctx[34],
+    						!current
+    						? get_all_dirty_from_scope(/*$$scope*/ ctx[34])
+    						: get_slot_changes(checkedIcon_slot_template, /*$$scope*/ ctx[34], dirty, get_checkedIcon_slot_changes),
+    						get_checkedIcon_slot_context
+    					);
+    				}
+    			}
+
+    			if (!current || dirty[0] & /*checkedIconStyle*/ 32) {
+    				attr_dev(div0, "style", /*checkedIconStyle*/ ctx[5]);
+    			}
+
+    			if (unCheckedIcon_slot) {
+    				if (unCheckedIcon_slot.p && (!current || dirty[1] & /*$$scope*/ 8)) {
+    					update_slot_base(
+    						unCheckedIcon_slot,
+    						unCheckedIcon_slot_template,
+    						ctx,
+    						/*$$scope*/ ctx[34],
+    						!current
+    						? get_all_dirty_from_scope(/*$$scope*/ ctx[34])
+    						: get_slot_changes(unCheckedIcon_slot_template, /*$$scope*/ ctx[34], dirty, get_unCheckedIcon_slot_changes),
+    						get_unCheckedIcon_slot_context
+    					);
+    				}
+    			}
+
+    			if (!current || dirty[0] & /*uncheckedIconStyle*/ 64) {
+    				attr_dev(div1, "style", /*uncheckedIconStyle*/ ctx[6]);
+    			}
+
+    			if (!current || dirty[0] & /*backgroundStyle*/ 16) {
+    				attr_dev(div2, "style", /*backgroundStyle*/ ctx[4]);
+    			}
+
+    			if (!current || dirty[0] & /*handleStyle*/ 128) {
+    				attr_dev(div3, "style", /*handleStyle*/ ctx[7]);
+    			}
+
+    			if (!current || dirty[0] & /*disabled*/ 1) {
+    				prop_dev(input, "disabled", /*disabled*/ ctx[0]);
+    			}
+
+    			if (!current || dirty[0] & /*inputStyle*/ 256) {
+    				attr_dev(input, "style", /*inputStyle*/ ctx[8]);
+    			}
+
+    			if (!current || dirty[0] & /*containerClass*/ 2) {
+    				attr_dev(div4, "class", /*containerClass*/ ctx[1]);
+    			}
+
+    			if (!current || dirty[0] & /*rootStyle*/ 8) {
+    				attr_dev(div4, "style", /*rootStyle*/ ctx[3]);
+    			}
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(checkedIcon_slot_or_fallback, local);
+    			transition_in(unCheckedIcon_slot_or_fallback, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(checkedIcon_slot_or_fallback, local);
+    			transition_out(unCheckedIcon_slot_or_fallback, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div4);
+    			if (checkedIcon_slot_or_fallback) checkedIcon_slot_or_fallback.d(detaching);
+    			if (unCheckedIcon_slot_or_fallback) unCheckedIcon_slot_or_fallback.d(detaching);
+    			/*input_binding*/ ctx[36](null);
+    			mounted = false;
+    			run_all(dispose);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$2.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    const func = e => e.preventDefault();
+    const click_handler = e => e.preventDefault();
+
+    function instance$2($$self, $$props, $$invalidate) {
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots('Switch', slots, ['checkedIcon','unCheckedIcon']);
+    	let { checked } = $$props;
+    	let { disabled = false } = $$props;
+    	let { offColor = "#888" } = $$props;
+    	let { onColor = "#080" } = $$props;
+    	let { offHandleColor = "#fff" } = $$props;
+    	let { onHandleColor = "#fff" } = $$props;
+    	let { handleDiameter } = $$props;
+    	let { unCheckedIcon = UncheckedIcon } = $$props;
+    	let { checkedIcon = CheckedIcon } = $$props;
+    	let { boxShadow = null } = $$props;
+    	let { activeBoxShadow = "0 0 2px 3px #3bf" } = $$props;
+    	let { height = 28 } = $$props;
+    	let { width = 56 } = $$props;
+    	let { id = "" } = $$props;
+    	let { containerClass = "" } = $$props;
+    	const dispatch = createEventDispatcher();
+
+    	//state
+    	let state = {
+    		handleDiameter: 0,
+    		checkedPos: 0,
+    		uncheckedPos: 0,
+    		pos: 0,
+    		lastDragAt: 0,
+    		lastKeyUpAt: 0,
+    		startX: null,
+    		hasOutline: null,
+    		dragStartingTime: null,
+    		checkedStateFromDragging: false
+    	};
+
+    	let inputRef = null;
+    	state.handleDiameter = handleDiameter || height - 2;
+    	state.checkedPos = Math.max(width - height, width - (height + state.handleDiameter) / 2);
+    	state.uncheckedPos = Math.max(0, (height - state.handleDiameter) / 2);
+    	state.pos = checked ? state.checkedPos : state.uncheckedPos;
+    	state.lastDragAt = 0;
+    	state.lastKeyUpAt = 0;
+
+    	//event handlers
+    	function onDragStart(clientX) {
+    		inputRef && inputRef.focus && inputRef.focus();
+    		$$invalidate(33, state.startX = clientX, state);
+    		$$invalidate(33, state.hasOutline = true, state);
+    		$$invalidate(33, state.dragStartingTime = Date.now(), state);
+    	}
+
+    	function onDrag(clientX) {
+    		let { startX, isDragging, pos } = state;
+    		const startPos = checked ? state.checkedPos : state.uncheckedPos;
+    		const mousePos = startPos + clientX - startX;
+
+    		// We need this check to fix a windows glitch where onDrag is triggered onMouseDown in some cases
+    		if (!isDragging && clientX !== startX) {
+    			$$invalidate(33, state.isDragging = true, state);
+    		}
+
+    		const newPos = Math.min(state.checkedPos, Math.max(state.uncheckedPos, mousePos));
+
+    		// Prevent unnecessary rerenders
+    		if (newPos !== pos) {
+    			$$invalidate(33, state.pos = newPos, state);
+    		}
+    	}
+
+    	function onDragStop(event) {
+    		let { pos, isDragging, dragStartingTime } = state;
+    		const halfwayCheckpoint = (state.checkedPos + state.uncheckedPos) / 2;
+
+    		// Simulate clicking the handle
+    		const timeSinceStart = Date.now() - dragStartingTime;
+
+    		if (!isDragging || timeSinceStart < 250) {
+    			onChangeTrigger(event);
+    		} else if (checked) {
+    			if (pos > halfwayCheckpoint) {
+    				$$invalidate(33, state.pos = state.checkedPos, state); // Handle dragging from checked position
+    			} else {
+    				onChangeTrigger(event);
+    			}
+    		} else if (pos < halfwayCheckpoint) {
+    			$$invalidate(33, state.pos = state.uncheckedPos, state); // Handle dragging from unchecked position
+    		} else {
+    			onChangeTrigger(event);
+    		}
+
+    		$$invalidate(33, state.isDragging = false, state);
+    		$$invalidate(33, state.hasOutline = false, state);
+    		$$invalidate(33, state.lastDragAt = Date.now(), state);
+    	}
+
+    	function onMouseDown(event) {
+    		event.preventDefault();
+
+    		// Ignore right click and scroll
+    		if (typeof event.button === "number" && event.button !== 0) {
+    			return;
+    		}
+
+    		onDragStart(event.clientX);
+    		window.addEventListener("mousemove", onMouseMove);
+    		window.addEventListener("mouseup", onMouseUp);
+    	}
+
+    	function onMouseMove(event) {
+    		event.preventDefault();
+    		onDrag(event.clientX);
+    	}
+
+    	function onMouseUp(event) {
+    		onDragStop(event);
+    		window.removeEventListener("mousemove", onMouseMove);
+    		window.removeEventListener("mouseup", onMouseUp);
+    	}
+
+    	function onTouchStart(event) {
+    		$$invalidate(33, state.checkedStateFromDragging = null, state);
+    		onDragStart(event.touches[0].clientX);
+    	}
+
+    	function onTouchMove(event) {
+    		onDrag(event.touches[0].clientX);
+    	}
+
+    	function onTouchEnd(event) {
+    		event.preventDefault();
+    		onDragStop(event);
+    	}
+
+    	function onInputChange(event) {
+    		// This condition is unfortunately needed in some browsers where the input's change event might get triggered
+    		// right after the dragstop event is triggered (occurs when dropping over a label element)
+    		if (Date.now() - state.lastDragAt > 50) {
+    			onChangeTrigger(event);
+
+    			// Prevent clicking label, but not key activation from setting outline to true - yes, this is absurd
+    			if (Date.now() - state.lastKeyUpAt > 50) {
+    				$$invalidate(33, state.hasOutline = false, state);
+    			}
+    		}
+    	}
+
+    	function onKeyUp() {
+    		$$invalidate(33, state.lastKeyUpAt = Date.now(), state);
+    	}
+
+    	function setHasOutline() {
+    		$$invalidate(33, state.hasOutline = true, state);
+    	}
+
+    	function unsetHasOutline() {
+    		$$invalidate(33, state.hasOutline = false, state);
+    	}
+
+    	function onClick(event) {
+    		event.preventDefault();
+    		inputRef.focus();
+    		onChangeTrigger(event);
+    		$$invalidate(33, state.hasOutline = false, state);
+    	}
+
+    	function onChangeTrigger(event) {
+    		$$invalidate(20, checked = !checked);
+    		dispatch("change", { checked, event, id });
+    	}
+
+    	//Hack since components should always to starting with Capital letter and props are camelCasing
+    	let CIcon = checkedIcon;
+
+    	let UIcon = unCheckedIcon;
+
+    	//styles
+    	let rootStyle = "";
+
+    	let backgroundStyle = "";
+    	let checkedIconStyle = "";
+    	let uncheckedIconStyle = "";
+    	let handleStyle = "";
+    	let inputStyle = "";
+
+    	$$self.$$.on_mount.push(function () {
+    		if (checked === undefined && !('checked' in $$props || $$self.$$.bound[$$self.$$.props['checked']])) {
+    			console.warn("<Switch> was created without expected prop 'checked'");
+    		}
+
+    		if (handleDiameter === undefined && !('handleDiameter' in $$props || $$self.$$.bound[$$self.$$.props['handleDiameter']])) {
+    			console.warn("<Switch> was created without expected prop 'handleDiameter'");
+    		}
+    	});
+
+    	const writable_props = [
+    		'checked',
+    		'disabled',
+    		'offColor',
+    		'onColor',
+    		'offHandleColor',
+    		'onHandleColor',
+    		'handleDiameter',
+    		'unCheckedIcon',
+    		'checkedIcon',
+    		'boxShadow',
+    		'activeBoxShadow',
+    		'height',
+    		'width',
+    		'id',
+    		'containerClass'
+    	];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<Switch> was created with unknown prop '${key}'`);
+    	});
+
+    	function input_binding($$value) {
+    		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
+    			inputRef = $$value;
+    			$$invalidate(2, inputRef);
+    		});
+    	}
+
+    	$$self.$$set = $$props => {
+    		if ('checked' in $$props) $$invalidate(20, checked = $$props.checked);
+    		if ('disabled' in $$props) $$invalidate(0, disabled = $$props.disabled);
+    		if ('offColor' in $$props) $$invalidate(21, offColor = $$props.offColor);
+    		if ('onColor' in $$props) $$invalidate(22, onColor = $$props.onColor);
+    		if ('offHandleColor' in $$props) $$invalidate(23, offHandleColor = $$props.offHandleColor);
+    		if ('onHandleColor' in $$props) $$invalidate(24, onHandleColor = $$props.onHandleColor);
+    		if ('handleDiameter' in $$props) $$invalidate(25, handleDiameter = $$props.handleDiameter);
+    		if ('unCheckedIcon' in $$props) $$invalidate(26, unCheckedIcon = $$props.unCheckedIcon);
+    		if ('checkedIcon' in $$props) $$invalidate(27, checkedIcon = $$props.checkedIcon);
+    		if ('boxShadow' in $$props) $$invalidate(28, boxShadow = $$props.boxShadow);
+    		if ('activeBoxShadow' in $$props) $$invalidate(29, activeBoxShadow = $$props.activeBoxShadow);
+    		if ('height' in $$props) $$invalidate(30, height = $$props.height);
+    		if ('width' in $$props) $$invalidate(31, width = $$props.width);
+    		if ('id' in $$props) $$invalidate(32, id = $$props.id);
+    		if ('containerClass' in $$props) $$invalidate(1, containerClass = $$props.containerClass);
+    		if ('$$scope' in $$props) $$invalidate(34, $$scope = $$props.$$scope);
+    	};
+
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		onDestroy,
+    		createEventDispatcher,
+    		defaultCheckedIcon: CheckedIcon,
+    		defaultUncheckedIcon: UncheckedIcon,
+    		getBackgroundColor,
+    		checked,
+    		disabled,
+    		offColor,
+    		onColor,
+    		offHandleColor,
+    		onHandleColor,
+    		handleDiameter,
+    		unCheckedIcon,
+    		checkedIcon,
+    		boxShadow,
+    		activeBoxShadow,
+    		height,
+    		width,
+    		id,
+    		containerClass,
+    		dispatch,
+    		state,
+    		inputRef,
+    		onDragStart,
+    		onDrag,
+    		onDragStop,
+    		onMouseDown,
+    		onMouseMove,
+    		onMouseUp,
+    		onTouchStart,
+    		onTouchMove,
+    		onTouchEnd,
+    		onInputChange,
+    		onKeyUp,
+    		setHasOutline,
+    		unsetHasOutline,
+    		onClick,
+    		onChangeTrigger,
+    		CIcon,
+    		UIcon,
+    		rootStyle,
+    		backgroundStyle,
+    		checkedIconStyle,
+    		uncheckedIconStyle,
+    		handleStyle,
+    		inputStyle
+    	});
+
+    	$$self.$inject_state = $$props => {
+    		if ('checked' in $$props) $$invalidate(20, checked = $$props.checked);
+    		if ('disabled' in $$props) $$invalidate(0, disabled = $$props.disabled);
+    		if ('offColor' in $$props) $$invalidate(21, offColor = $$props.offColor);
+    		if ('onColor' in $$props) $$invalidate(22, onColor = $$props.onColor);
+    		if ('offHandleColor' in $$props) $$invalidate(23, offHandleColor = $$props.offHandleColor);
+    		if ('onHandleColor' in $$props) $$invalidate(24, onHandleColor = $$props.onHandleColor);
+    		if ('handleDiameter' in $$props) $$invalidate(25, handleDiameter = $$props.handleDiameter);
+    		if ('unCheckedIcon' in $$props) $$invalidate(26, unCheckedIcon = $$props.unCheckedIcon);
+    		if ('checkedIcon' in $$props) $$invalidate(27, checkedIcon = $$props.checkedIcon);
+    		if ('boxShadow' in $$props) $$invalidate(28, boxShadow = $$props.boxShadow);
+    		if ('activeBoxShadow' in $$props) $$invalidate(29, activeBoxShadow = $$props.activeBoxShadow);
+    		if ('height' in $$props) $$invalidate(30, height = $$props.height);
+    		if ('width' in $$props) $$invalidate(31, width = $$props.width);
+    		if ('id' in $$props) $$invalidate(32, id = $$props.id);
+    		if ('containerClass' in $$props) $$invalidate(1, containerClass = $$props.containerClass);
+    		if ('state' in $$props) $$invalidate(33, state = $$props.state);
+    		if ('inputRef' in $$props) $$invalidate(2, inputRef = $$props.inputRef);
+    		if ('CIcon' in $$props) $$invalidate(18, CIcon = $$props.CIcon);
+    		if ('UIcon' in $$props) $$invalidate(19, UIcon = $$props.UIcon);
+    		if ('rootStyle' in $$props) $$invalidate(3, rootStyle = $$props.rootStyle);
+    		if ('backgroundStyle' in $$props) $$invalidate(4, backgroundStyle = $$props.backgroundStyle);
+    		if ('checkedIconStyle' in $$props) $$invalidate(5, checkedIconStyle = $$props.checkedIconStyle);
+    		if ('uncheckedIconStyle' in $$props) $$invalidate(6, uncheckedIconStyle = $$props.uncheckedIconStyle);
+    		if ('handleStyle' in $$props) $$invalidate(7, handleStyle = $$props.handleStyle);
+    		if ('inputStyle' in $$props) $$invalidate(8, inputStyle = $$props.inputStyle);
+    	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
+    	$$self.$$.update = () => {
+    		if ($$self.$$.dirty[0] & /*checked*/ 1048576 | $$self.$$.dirty[1] & /*state*/ 4) {
+    			if (!state.isDragging) {
+    				$$invalidate(33, state.pos = checked ? state.checkedPos : state.uncheckedPos, state);
+    			}
+    		}
+
+    		if ($$self.$$.dirty[0] & /*disabled, height*/ 1073741825) {
+    			$$invalidate(3, rootStyle = `
+    position: relative;
+    display: inline-block;
+    text-align: left;
+    opacity: ${disabled ? 0.5 : 1};
+    direction: ltr;
+    border-radius: ${height / 2}px;
+    transition: opacity 0.25s;
+    touch-action: none;
+    webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+    user-select: none;
+  `);
+    		}
+
+    		if ($$self.$$.dirty[0] & /*height, offColor, onColor, disabled*/ 1080033281 | $$self.$$.dirty[1] & /*width, state*/ 5) {
+    			$$invalidate(4, backgroundStyle = `
+    height: ${height}px;
+    width: ${width}px;
+    margin: ${Math.max(0, (state.handleDiameter - height) / 2)}px;
+    position: relative;
+    background: ${getBackgroundColor(state.pos, state.checkedPos, state.uncheckedPos, offColor, onColor)};
+    border-radius: ${height / 2}px;
+    cursor: ${disabled ? "default" : "pointer"};
+    transition: ${state.isDragging ? null : "background 0.25s"};
+  `);
+    		}
+
+    		if ($$self.$$.dirty[0] & /*height*/ 1073741824 | $$self.$$.dirty[1] & /*width, state*/ 5) {
+    			$$invalidate(5, checkedIconStyle = `
+    height: ${height}px;
+    width: ${Math.min(height * 1.5, width - (state.handleDiameter + height) / 2 + 1)}px;
+    position: relative;
+    opacity:
+      ${(state.pos - state.uncheckedPos) / (state.checkedPos - state.uncheckedPos)};
+    pointer-events: none;
+    transition: ${state.isDragging ? null : "opacity 0.25s"};
+  `);
+    		}
+
+    		if ($$self.$$.dirty[0] & /*height*/ 1073741824 | $$self.$$.dirty[1] & /*width, state*/ 5) {
+    			$$invalidate(6, uncheckedIconStyle = `
+    height: ${height}px;
+    width: ${Math.min(height * 1.5, width - (state.handleDiameter + height) / 2 + 1)}px;
+    position: absolute;
+    opacity:
+      ${1 - (state.pos - state.uncheckedPos) / (state.checkedPos - state.uncheckedPos)};
+    right: 0px;
+    top: 0px;
+    pointer-events: none;
+    transition: ${state.isDragging ? null : "opacity 0.25s"};
+  `);
+    		}
+
+    		if ($$self.$$.dirty[0] & /*offHandleColor, onHandleColor, disabled, height, activeBoxShadow, boxShadow*/ 1904214017 | $$self.$$.dirty[1] & /*state*/ 4) {
+    			$$invalidate(7, handleStyle = `
+    height: ${state.handleDiameter}px;
+    width: ${state.handleDiameter}px;
+    background: ${getBackgroundColor(state.pos, state.checkedPos, state.uncheckedPos, offHandleColor, onHandleColor)};
+    display: inline-block;
+    cursor: ${disabled ? "default" : "pointer"};
+    border-radius: 50%;
+    position: absolute;
+    transform: translateX(${state.pos}px);
+    top: ${Math.max(0, (height - state.handleDiameter) / 2)}px;
+    outline: 0;
+    box-shadow: ${state.hasOutline ? activeBoxShadow : boxShadow};
+    border: 0;
+    transition: ${state.isDragging
+			? null
+			: "background-color 0.25s, transform 0.25s, box-shadow 0.15s"};
+  `);
+    		}
+    	};
+
+    	$$invalidate(8, inputStyle = `
+    border: 0px;
+    clip: rect(0 0 0 0);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0px;
+    position: absolute;
+    width: 1px;
+  `);
+
+    	return [
+    		disabled,
+    		containerClass,
+    		inputRef,
+    		rootStyle,
+    		backgroundStyle,
+    		checkedIconStyle,
+    		uncheckedIconStyle,
+    		handleStyle,
+    		inputStyle,
+    		onMouseDown,
+    		onTouchStart,
+    		onTouchMove,
+    		onTouchEnd,
+    		onInputChange,
+    		onKeyUp,
+    		setHasOutline,
+    		unsetHasOutline,
+    		onClick,
+    		CIcon,
+    		UIcon,
+    		checked,
+    		offColor,
+    		onColor,
+    		offHandleColor,
+    		onHandleColor,
+    		handleDiameter,
+    		unCheckedIcon,
+    		checkedIcon,
+    		boxShadow,
+    		activeBoxShadow,
+    		height,
+    		width,
+    		id,
+    		state,
+    		$$scope,
+    		slots,
+    		input_binding
+    	];
+    }
+
+    class Switch extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+
+    		init(
+    			this,
+    			options,
+    			instance$2,
+    			create_fragment$2,
+    			safe_not_equal,
+    			{
+    				checked: 20,
+    				disabled: 0,
+    				offColor: 21,
+    				onColor: 22,
+    				offHandleColor: 23,
+    				onHandleColor: 24,
+    				handleDiameter: 25,
+    				unCheckedIcon: 26,
+    				checkedIcon: 27,
+    				boxShadow: 28,
+    				activeBoxShadow: 29,
+    				height: 30,
+    				width: 31,
+    				id: 32,
+    				containerClass: 1
+    			},
+    			null,
+    			[-1, -1]
+    		);
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Switch",
+    			options,
+    			id: create_fragment$2.name
+    		});
+    	}
+
+    	get checked() {
+    		throw new Error("<Switch>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set checked(value) {
+    		throw new Error("<Switch>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get disabled() {
+    		throw new Error("<Switch>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set disabled(value) {
+    		throw new Error("<Switch>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get offColor() {
+    		throw new Error("<Switch>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set offColor(value) {
+    		throw new Error("<Switch>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get onColor() {
+    		throw new Error("<Switch>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set onColor(value) {
+    		throw new Error("<Switch>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get offHandleColor() {
+    		throw new Error("<Switch>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set offHandleColor(value) {
+    		throw new Error("<Switch>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get onHandleColor() {
+    		throw new Error("<Switch>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set onHandleColor(value) {
+    		throw new Error("<Switch>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get handleDiameter() {
+    		throw new Error("<Switch>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set handleDiameter(value) {
+    		throw new Error("<Switch>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get unCheckedIcon() {
+    		throw new Error("<Switch>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set unCheckedIcon(value) {
+    		throw new Error("<Switch>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get checkedIcon() {
+    		throw new Error("<Switch>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set checkedIcon(value) {
+    		throw new Error("<Switch>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get boxShadow() {
+    		throw new Error("<Switch>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set boxShadow(value) {
+    		throw new Error("<Switch>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get activeBoxShadow() {
+    		throw new Error("<Switch>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set activeBoxShadow(value) {
+    		throw new Error("<Switch>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get height() {
+    		throw new Error("<Switch>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set height(value) {
+    		throw new Error("<Switch>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get width() {
+    		throw new Error("<Switch>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set width(value) {
+    		throw new Error("<Switch>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get id() {
+    		throw new Error("<Switch>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set id(value) {
+    		throw new Error("<Switch>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get containerClass() {
+    		throw new Error("<Switch>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set containerClass(value) {
+    		throw new Error("<Switch>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+    }
+
+    /* src/Topbar.svelte generated by Svelte v3.55.1 */
+    const file$1 = "src/Topbar.svelte";
+
+    // (31:12) 
+    function create_checkedIcon_slot(ctx) {
+    	let span;
+
+    	const block = {
+    		c: function create() {
+    			span = element("span");
+    			attr_dev(span, "slot", "checkedIcon");
+    			add_location(span, file$1, 30, 12, 960);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, span, anchor);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(span);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_checkedIcon_slot.name,
+    		type: "slot",
+    		source: "(31:12) ",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (33:12) 
+    function create_unCheckedIcon_slot(ctx) {
+    	let span;
+
+    	const block = {
+    		c: function create() {
+    			span = element("span");
+    			attr_dev(span, "slot", "unCheckedIcon");
+    			add_location(span, file$1, 32, 12, 1026);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, span, anchor);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(span);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_unCheckedIcon_slot.name,
+    		type: "slot",
+    		source: "(33:12) ",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$1(ctx) {
+    	let link0;
+    	let meta;
+    	let link1;
+    	let t0;
+    	let div;
+    	let a0;
+    	let t2;
+    	let a1;
+    	let h1;
+    	let t4;
+    	let a2;
+    	let t6;
+    	let a3;
+    	let switch_1;
+    	let current;
+
+    	switch_1 = new Switch({
+    			props: {
+    				height: "22",
+    				width: "40",
+    				checked: /*checkedValue*/ ctx[0],
+    				$$slots: {
+    					unCheckedIcon: [create_unCheckedIcon_slot],
+    					checkedIcon: [create_checkedIcon_slot]
+    				},
+    				$$scope: { ctx }
+    			},
+    			$$inline: true
+    		});
+
+    	switch_1.$on("change", /*handleChange*/ ctx[1]);
+
+    	const block = {
+    		c: function create() {
+    			link0 = element("link");
+    			meta = element("meta");
+    			link1 = element("link");
+    			t0 = space();
+    			div = element("div");
+    			a0 = element("a");
+    			a0.textContent = "Home";
+    			t2 = space();
+    			a1 = element("a");
+    			h1 = element("h1");
+    			h1.textContent = "Ristinolla";
+    			t4 = space();
+    			a2 = element("a");
+    			a2.textContent = "About";
+    			t6 = space();
+    			a3 = element("a");
+    			create_component(switch_1.$$.fragment);
+    			attr_dev(link0, "rel", "stylesheet");
+    			attr_dev(link0, "href", "/tutorial/dark-theme.css");
+    			add_location(link0, file$1, 16, 1, 247);
+    			attr_dev(meta, "name", "viewport");
+    			attr_dev(meta, "content", "width=device-width, initial-scale=1");
+    			add_location(meta, file$1, 17, 4, 307);
+    			attr_dev(link1, "rel", "stylesheet");
+    			attr_dev(link1, "href", "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css");
+    			add_location(link1, file$1, 18, 4, 380);
+    			attr_dev(a0, "href", "#home");
+    			attr_dev(a0, "class", "active svelte-aa3383");
+    			add_location(a0, file$1, 22, 4, 589);
+    			add_location(h1, file$1, 23, 7, 636);
+    			attr_dev(a1, "class", "svelte-aa3383");
+    			add_location(a1, file$1, 23, 4, 633);
+    			attr_dev(a2, "class", "right svelte-aa3383");
+    			attr_dev(a2, "href", "#about");
+    			add_location(a2, file$1, 24, 4, 664);
+    			attr_dev(a3, "class", "right svelte-aa3383");
+    			add_location(a3, file$1, 28, 4, 846);
+    			attr_dev(div, "class", "" + (null_to_empty(/*wideScreen*/ ctx[2] ? 'topnav' : 'topnav responsive') + " svelte-aa3383"));
+    			attr_dev(div, "id", "myTopnav");
+    			add_location(div, file$1, 21, 0, 510);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			append_dev(document.head, link0);
+    			append_dev(document.head, meta);
+    			append_dev(document.head, link1);
+    			insert_dev(target, t0, anchor);
+    			insert_dev(target, div, anchor);
+    			append_dev(div, a0);
+    			append_dev(div, t2);
+    			append_dev(div, a1);
+    			append_dev(a1, h1);
+    			append_dev(div, t4);
+    			append_dev(div, a2);
+    			append_dev(div, t6);
+    			append_dev(div, a3);
+    			mount_component(switch_1, a3, null);
+    			current = true;
+    		},
+    		p: function update(ctx, [dirty]) {
+    			const switch_1_changes = {};
+    			if (dirty & /*checkedValue*/ 1) switch_1_changes.checked = /*checkedValue*/ ctx[0];
+
+    			if (dirty & /*$$scope*/ 8) {
+    				switch_1_changes.$$scope = { dirty, ctx };
+    			}
+
+    			switch_1.$set(switch_1_changes);
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(switch_1.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(switch_1.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			detach_dev(link0);
+    			detach_dev(meta);
+    			detach_dev(link1);
+    			if (detaching) detach_dev(t0);
+    			if (detaching) detach_dev(div);
+    			destroy_component(switch_1);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$1.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$1($$self, $$props, $$invalidate) {
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots('Topbar', slots, []);
+    	let checkedValue = true;
+
+    	function handleChange(e) {
+    		const { checked } = e.detail;
+    		$$invalidate(0, checkedValue = checked);
+    	}
+
+    	let wideScreen = true;
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<Topbar> was created with unknown prop '${key}'`);
+    	});
+
+    	$$self.$capture_state = () => ({
+    		Switch,
+    		checkedValue,
+    		handleChange,
+    		wideScreen
+    	});
+
+    	$$self.$inject_state = $$props => {
+    		if ('checkedValue' in $$props) $$invalidate(0, checkedValue = $$props.checkedValue);
+    		if ('wideScreen' in $$props) $$invalidate(2, wideScreen = $$props.wideScreen);
+    	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
+    	return [checkedValue, handleChange, wideScreen];
+    }
+
+    class Topbar extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$1, create_fragment$1, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Topbar",
+    			options,
+    			id: create_fragment$1.name
+    		});
+    	}
+    }
+
+    /* src/App.svelte generated by Svelte v3.55.1 */
 
     const { console: console_1 } = globals;
-    const file = "src\\App.svelte";
+    const file = "src/App.svelte";
 
     function create_fragment(ctx) {
     	let meta;
     	let html;
     	let t0;
-    	let div0;
-    	let h10;
-    	let t2;
+    	let topbar;
+    	let t1;
     	let main;
-    	let div1;
+    	let div0;
     	let fieldset;
     	let legend;
-    	let t4;
+    	let t3;
     	let table;
     	let tr0;
     	let th0;
-    	let t6;
+    	let t5;
     	let th1;
-    	let t8;
+    	let t7;
     	let tr1;
     	let td0;
-    	let t9_value = /*score*/ ctx[3].X + "";
+    	let t8_value = /*score*/ ctx[3].X + "";
+    	let t8;
     	let t9;
-    	let t10;
     	let td1;
-    	let t11_value = /*score*/ ctx[3].O + "";
+    	let t10_value = /*score*/ ctx[3].O + "";
+    	let t10;
     	let t11;
-    	let t12;
     	let br;
-    	let t13;
+    	let t12;
     	let p0;
 
-    	let t14_value = (/*win*/ ctx[0] === ''
+    	let t13_value = (/*win*/ ctx[0] === ''
     	? "Sinun vuorosi"
     	: "Voittaja: " + /*win*/ ctx[0]) + "";
 
+    	let t13;
     	let t14;
-    	let t15;
     	let button0;
-    	let t16;
+    	let t15;
     	let button0_disabled_value;
-    	let t17;
+    	let t16;
     	let button1;
-    	let t19;
-    	let div2;
+    	let t18;
+    	let div1;
     	let game;
     	let updating_winner;
-    	let t20;
-    	let div5;
-    	let h11;
-    	let t22;
-    	let div3;
-    	let input0;
-    	let t23;
-    	let label0;
-    	let t25;
+    	let t19;
     	let div4;
+    	let h1;
+    	let t21;
+    	let div2;
+    	let input0;
+    	let t22;
+    	let label0;
+    	let t24;
+    	let div3;
     	let input1;
-    	let t26;
+    	let t25;
     	let label1;
-    	let t28;
+    	let t27;
     	let p1;
+    	let t28;
     	let t29;
     	let t30;
-    	let t31;
     	let button2;
-    	let t33;
+    	let t32;
     	let button3;
-    	let t35;
+    	let t34;
     	let input2;
     	let current;
     	let mounted;
     	let dispose;
+    	topbar = new Topbar({ $$inline: true });
 
     	function game_winner_binding(value) {
     		/*game_winner_binding*/ ctx[7](value);
@@ -4379,157 +5930,151 @@ var app = (function () {
     			meta = element("meta");
     			html = element("html");
     			t0 = space();
-    			div0 = element("div");
-    			h10 = element("h1");
-    			h10.textContent = "Ristinolla";
-    			t2 = space();
+    			create_component(topbar.$$.fragment);
+    			t1 = space();
     			main = element("main");
-    			div1 = element("div");
+    			div0 = element("div");
     			fieldset = element("fieldset");
     			legend = element("legend");
     			legend.textContent = "Pelitilanne";
-    			t4 = space();
+    			t3 = space();
     			table = element("table");
     			tr0 = element("tr");
     			th0 = element("th");
     			th0.textContent = "X";
-    			t6 = space();
+    			t5 = space();
     			th1 = element("th");
     			th1.textContent = "O";
-    			t8 = space();
+    			t7 = space();
     			tr1 = element("tr");
     			td0 = element("td");
-    			t9 = text(t9_value);
-    			t10 = space();
+    			t8 = text(t8_value);
+    			t9 = space();
     			td1 = element("td");
-    			t11 = text(t11_value);
-    			t12 = space();
+    			t10 = text(t10_value);
+    			t11 = space();
     			br = element("br");
-    			t13 = space();
+    			t12 = space();
     			p0 = element("p");
-    			t14 = text(t14_value);
-    			t15 = space();
+    			t13 = text(t13_value);
+    			t14 = space();
     			button0 = element("button");
-    			t16 = text("Uusi peli");
-    			t17 = space();
+    			t15 = text("Uusi peli");
+    			t16 = space();
     			button1 = element("button");
     			button1.textContent = "Viime siirto";
-    			t19 = space();
-    			div2 = element("div");
+    			t18 = space();
+    			div1 = element("div");
     			create_component(game.$$.fragment);
-    			t20 = space();
-    			div5 = element("div");
-    			h11 = element("h1");
-    			h11.textContent = "Asetukset";
-    			t22 = space();
-    			div3 = element("div");
+    			t19 = space();
+    			div4 = element("div");
+    			h1 = element("h1");
+    			h1.textContent = "Asetukset";
+    			t21 = space();
+    			div2 = element("div");
     			input0 = element("input");
-    			t23 = space();
+    			t22 = space();
     			label0 = element("label");
     			label0.textContent = "Tausta";
-    			t25 = space();
-    			div4 = element("div");
+    			t24 = space();
+    			div3 = element("div");
     			input1 = element("input");
-    			t26 = space();
+    			t25 = space();
     			label1 = element("label");
     			label1.textContent = "Reuna";
-    			t28 = space();
+    			t27 = space();
     			p1 = element("p");
-    			t29 = text("Väri: ");
-    			t30 = text(/*color2*/ ctx[4]);
-    			t31 = space();
+    			t28 = text("Väri: ");
+    			t29 = text(/*color2*/ ctx[4]);
+    			t30 = space();
     			button2 = element("button");
     			button2.textContent = "++";
-    			t33 = space();
+    			t32 = space();
     			button3 = element("button");
     			button3.textContent = "--";
-    			t35 = space();
+    			t34 = space();
     			input2 = element("input");
     			document.title = "Ristinolla";
     			attr_dev(meta, "name", "robots");
     			attr_dev(meta, "content", "noindex nofollow");
-    			add_location(meta, file, 39, 1, 889);
+    			add_location(meta, file, 40, 1, 889);
     			attr_dev(html, "lang", "fi");
-    			add_location(html, file, 40, 1, 941);
-    			attr_dev(h10, "class", "svelte-1oqvegt");
-    			add_location(h10, file, 44, 1, 1002);
-    			attr_dev(div0, "class", "header svelte-1oqvegt");
-    			add_location(div0, file, 43, 0, 979);
+    			add_location(html, file, 41, 1, 940);
     			attr_dev(legend, "align", "center");
     			attr_dev(legend, "class", "svelte-1oqvegt");
-    			add_location(legend, file, 50, 3, 1133);
+    			add_location(legend, file, 52, 3, 1138);
     			attr_dev(th0, "class", "svelte-1oqvegt");
-    			add_location(th0, file, 53, 6, 1224);
+    			add_location(th0, file, 55, 6, 1226);
     			attr_dev(th1, "class", "svelte-1oqvegt");
-    			add_location(th1, file, 54, 6, 1242);
+    			add_location(th1, file, 56, 6, 1243);
     			attr_dev(tr0, "class", "svelte-1oqvegt");
-    			add_location(tr0, file, 52, 4, 1212);
+    			add_location(tr0, file, 54, 4, 1215);
     			attr_dev(td0, "id", "xscore");
     			attr_dev(td0, "class", "scores svelte-1oqvegt");
-    			add_location(td0, file, 57, 6, 1281);
+    			add_location(td0, file, 59, 6, 1279);
     			attr_dev(td1, "id", "oscore");
     			attr_dev(td1, "class", "scores svelte-1oqvegt");
-    			add_location(td1, file, 58, 6, 1334);
+    			add_location(td1, file, 60, 6, 1331);
     			attr_dev(tr1, "class", "svelte-1oqvegt");
-    			add_location(tr1, file, 56, 4, 1269);
+    			add_location(tr1, file, 58, 4, 1268);
     			attr_dev(table, "class", "scores svelte-1oqvegt");
-    			add_location(table, file, 51, 3, 1184);
+    			add_location(table, file, 53, 3, 1188);
     			attr_dev(br, "class", "svelte-1oqvegt");
-    			add_location(br, file, 61, 3, 1408);
+    			add_location(br, file, 63, 3, 1402);
     			attr_dev(p0, "class", "svelte-1oqvegt");
-    			add_location(p0, file, 62, 3, 1417);
+    			add_location(p0, file, 64, 3, 1410);
     			attr_dev(fieldset, "class", "svelte-1oqvegt");
-    			add_location(fieldset, file, 49, 2, 1118);
+    			add_location(fieldset, file, 51, 2, 1124);
     			button0.disabled = button0_disabled_value = /*win*/ ctx[0] !== '' ? false : true;
     			attr_dev(button0, "class", "svelte-1oqvegt");
-    			add_location(button0, file, 65, 2, 1547);
+    			add_location(button0, file, 67, 2, 1537);
     			attr_dev(button1, "class", "svelte-1oqvegt");
-    			add_location(button1, file, 66, 2, 1661);
-    			attr_dev(div1, "class", "left svelte-1oqvegt");
-    			set_style(div1, "background", /*color2*/ ctx[4] + "55");
-    			set_style(div1, "color", "black");
-    			add_location(div1, file, 48, 1, 1044);
-    			attr_dev(div2, "class", "middle svelte-1oqvegt");
-    			add_location(div2, file, 69, 1, 1736);
-    			attr_dev(h11, "class", "svelte-1oqvegt");
-    			add_location(h11, file, 74, 2, 1949);
+    			add_location(button1, file, 68, 2, 1650);
+    			attr_dev(div0, "class", "left svelte-1oqvegt");
+    			set_style(div0, "background", /*color2*/ ctx[4] + "55");
+    			set_style(div0, "color", "black");
+    			add_location(div0, file, 50, 1, 1051);
+    			attr_dev(div1, "class", "middle svelte-1oqvegt");
+    			add_location(div1, file, 71, 1, 1722);
+    			attr_dev(h1, "class", "svelte-1oqvegt");
+    			add_location(h1, file, 76, 2, 1930);
     			attr_dev(input0, "type", "color");
     			attr_dev(input0, "id", "head");
     			attr_dev(input0, "name", "head");
     			attr_dev(input0, "class", "svelte-1oqvegt");
-    			add_location(input0, file, 76, 3, 1981);
+    			add_location(input0, file, 78, 3, 1960);
     			attr_dev(label0, "for", "head");
     			attr_dev(label0, "class", "svelte-1oqvegt");
-    			add_location(label0, file, 78, 3, 2053);
-    			attr_dev(div3, "class", "svelte-1oqvegt");
-    			add_location(div3, file, 75, 2, 1971);
+    			add_location(label0, file, 80, 3, 2030);
+    			attr_dev(div2, "class", "svelte-1oqvegt");
+    			add_location(div2, file, 77, 2, 1951);
     			attr_dev(input1, "type", "color");
     			attr_dev(input1, "id", "body");
     			attr_dev(input1, "name", "body");
     			attr_dev(input1, "class", "svelte-1oqvegt");
-    			add_location(input1, file, 81, 3, 2111);
+    			add_location(input1, file, 83, 3, 2085);
     			attr_dev(label1, "for", "body");
     			attr_dev(label1, "class", "svelte-1oqvegt");
-    			add_location(label1, file, 83, 3, 2183);
-    			attr_dev(div4, "class", "svelte-1oqvegt");
-    			add_location(div4, file, 80, 2, 2101);
+    			add_location(label1, file, 85, 3, 2155);
+    			attr_dev(div3, "class", "svelte-1oqvegt");
+    			add_location(div3, file, 82, 2, 2076);
     			attr_dev(p1, "class", "svelte-1oqvegt");
-    			add_location(p1, file, 85, 2, 2228);
+    			add_location(p1, file, 87, 2, 2198);
     			attr_dev(button2, "class", "svelte-1oqvegt");
-    			add_location(button2, file, 86, 2, 2253);
+    			add_location(button2, file, 88, 2, 2222);
     			attr_dev(button3, "class", "svelte-1oqvegt");
-    			add_location(button3, file, 87, 2, 2340);
+    			add_location(button3, file, 89, 2, 2308);
     			attr_dev(input2, "type", "range");
     			attr_dev(input2, "min", "5");
     			attr_dev(input2, "max", "30");
     			attr_dev(input2, "class", "svelte-1oqvegt");
-    			add_location(input2, file, 88, 2, 2427);
-    			attr_dev(div5, "class", "right svelte-1oqvegt");
-    			set_style(div5, "background", /*color2*/ ctx[4] + "55");
-    			set_style(div5, "color", "black");
-    			add_location(div5, file, 73, 1, 1874);
+    			add_location(input2, file, 90, 2, 2394);
+    			attr_dev(div4, "class", "right svelte-1oqvegt");
+    			set_style(div4, "background", /*color2*/ ctx[4] + "55");
+    			set_style(div4, "color", "black");
+    			add_location(div4, file, 75, 1, 1856);
     			attr_dev(main, "class", "svelte-1oqvegt");
-    			add_location(main, file, 47, 0, 1035);
+    			add_location(main, file, 49, 0, 1043);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -4538,64 +6083,63 @@ var app = (function () {
     			append_dev(document.head, meta);
     			append_dev(document.head, html);
     			insert_dev(target, t0, anchor);
-    			insert_dev(target, div0, anchor);
-    			append_dev(div0, h10);
-    			insert_dev(target, t2, anchor);
+    			mount_component(topbar, target, anchor);
+    			insert_dev(target, t1, anchor);
     			insert_dev(target, main, anchor);
-    			append_dev(main, div1);
-    			append_dev(div1, fieldset);
+    			append_dev(main, div0);
+    			append_dev(div0, fieldset);
     			append_dev(fieldset, legend);
-    			append_dev(fieldset, t4);
+    			append_dev(fieldset, t3);
     			append_dev(fieldset, table);
     			append_dev(table, tr0);
     			append_dev(tr0, th0);
-    			append_dev(tr0, t6);
+    			append_dev(tr0, t5);
     			append_dev(tr0, th1);
-    			append_dev(table, t8);
+    			append_dev(table, t7);
     			append_dev(table, tr1);
     			append_dev(tr1, td0);
-    			append_dev(td0, t9);
-    			append_dev(tr1, t10);
+    			append_dev(td0, t8);
+    			append_dev(tr1, t9);
     			append_dev(tr1, td1);
-    			append_dev(td1, t11);
-    			append_dev(fieldset, t12);
+    			append_dev(td1, t10);
+    			append_dev(fieldset, t11);
     			append_dev(fieldset, br);
-    			append_dev(fieldset, t13);
+    			append_dev(fieldset, t12);
     			append_dev(fieldset, p0);
-    			append_dev(p0, t14);
-    			append_dev(div1, t15);
-    			append_dev(div1, button0);
-    			append_dev(button0, t16);
-    			append_dev(div1, t17);
-    			append_dev(div1, button1);
+    			append_dev(p0, t13);
+    			append_dev(div0, t14);
+    			append_dev(div0, button0);
+    			append_dev(button0, t15);
+    			append_dev(div0, t16);
+    			append_dev(div0, button1);
+    			append_dev(main, t18);
+    			append_dev(main, div1);
+    			mount_component(game, div1, null);
     			append_dev(main, t19);
-    			append_dev(main, div2);
-    			mount_component(game, div2, null);
-    			append_dev(main, t20);
-    			append_dev(main, div5);
-    			append_dev(div5, h11);
-    			append_dev(div5, t22);
-    			append_dev(div5, div3);
-    			append_dev(div3, input0);
+    			append_dev(main, div4);
+    			append_dev(div4, h1);
+    			append_dev(div4, t21);
+    			append_dev(div4, div2);
+    			append_dev(div2, input0);
     			set_input_value(input0, /*color2*/ ctx[4]);
-    			append_dev(div3, t23);
-    			append_dev(div3, label0);
-    			append_dev(div5, t25);
-    			append_dev(div5, div4);
-    			append_dev(div4, input1);
+    			append_dev(div2, t22);
+    			append_dev(div2, label0);
+    			append_dev(div4, t24);
+    			append_dev(div4, div3);
+    			append_dev(div3, input1);
     			set_input_value(input1, /*color1*/ ctx[5]);
-    			append_dev(div4, t26);
-    			append_dev(div4, label1);
-    			append_dev(div5, t28);
-    			append_dev(div5, p1);
+    			append_dev(div3, t25);
+    			append_dev(div3, label1);
+    			append_dev(div4, t27);
+    			append_dev(div4, p1);
+    			append_dev(p1, t28);
     			append_dev(p1, t29);
-    			append_dev(p1, t30);
-    			append_dev(div5, t31);
-    			append_dev(div5, button2);
-    			append_dev(div5, t33);
-    			append_dev(div5, button3);
-    			append_dev(div5, t35);
-    			append_dev(div5, input2);
+    			append_dev(div4, t30);
+    			append_dev(div4, button2);
+    			append_dev(div4, t32);
+    			append_dev(div4, button3);
+    			append_dev(div4, t34);
+    			append_dev(div4, input2);
     			set_input_value(input2, /*boardSize*/ ctx[1]);
     			current = true;
 
@@ -4625,19 +6169,19 @@ var app = (function () {
     		},
     		p: function update(new_ctx, [dirty]) {
     			ctx = new_ctx;
-    			if ((!current || dirty & /*score*/ 8) && t9_value !== (t9_value = /*score*/ ctx[3].X + "")) set_data_dev(t9, t9_value);
-    			if ((!current || dirty & /*score*/ 8) && t11_value !== (t11_value = /*score*/ ctx[3].O + "")) set_data_dev(t11, t11_value);
+    			if ((!current || dirty & /*score*/ 8) && t8_value !== (t8_value = /*score*/ ctx[3].X + "")) set_data_dev(t8, t8_value);
+    			if ((!current || dirty & /*score*/ 8) && t10_value !== (t10_value = /*score*/ ctx[3].O + "")) set_data_dev(t10, t10_value);
 
-    			if ((!current || dirty & /*win*/ 1) && t14_value !== (t14_value = (/*win*/ ctx[0] === ''
+    			if ((!current || dirty & /*win*/ 1) && t13_value !== (t13_value = (/*win*/ ctx[0] === ''
     			? "Sinun vuorosi"
-    			: "Voittaja: " + /*win*/ ctx[0]) + "")) set_data_dev(t14, t14_value);
+    			: "Voittaja: " + /*win*/ ctx[0]) + "")) set_data_dev(t13, t13_value);
 
     			if (!current || dirty & /*win*/ 1 && button0_disabled_value !== (button0_disabled_value = /*win*/ ctx[0] !== '' ? false : true)) {
     				prop_dev(button0, "disabled", button0_disabled_value);
     			}
 
     			if (!current || dirty & /*color2*/ 16) {
-    				set_style(div1, "background", /*color2*/ ctx[4] + "55");
+    				set_style(div0, "background", /*color2*/ ctx[4] + "55");
     			}
 
     			const game_changes = {};
@@ -4659,22 +6203,24 @@ var app = (function () {
     				set_input_value(input1, /*color1*/ ctx[5]);
     			}
 
-    			if (!current || dirty & /*color2*/ 16) set_data_dev(t30, /*color2*/ ctx[4]);
+    			if (!current || dirty & /*color2*/ 16) set_data_dev(t29, /*color2*/ ctx[4]);
 
     			if (dirty & /*boardSize*/ 2) {
     				set_input_value(input2, /*boardSize*/ ctx[1]);
     			}
 
     			if (!current || dirty & /*color2*/ 16) {
-    				set_style(div5, "background", /*color2*/ ctx[4] + "55");
+    				set_style(div4, "background", /*color2*/ ctx[4] + "55");
     			}
     		},
     		i: function intro(local) {
     			if (current) return;
+    			transition_in(topbar.$$.fragment, local);
     			transition_in(game.$$.fragment, local);
     			current = true;
     		},
     		o: function outro(local) {
+    			transition_out(topbar.$$.fragment, local);
     			transition_out(game.$$.fragment, local);
     			current = false;
     		},
@@ -4682,8 +6228,8 @@ var app = (function () {
     			detach_dev(meta);
     			detach_dev(html);
     			if (detaching) detach_dev(t0);
-    			if (detaching) detach_dev(div0);
-    			if (detaching) detach_dev(t2);
+    			destroy_component(topbar, detaching);
+    			if (detaching) detach_dev(t1);
     			if (detaching) detach_dev(main);
     			/*game_binding*/ ctx[8](null);
     			destroy_component(game);
@@ -4772,6 +6318,7 @@ var app = (function () {
     	$$self.$capture_state = () => ({
     		onMount,
     		Game,
+    		Topbar,
     		gameBackground,
     		gameLineColor,
     		vw,

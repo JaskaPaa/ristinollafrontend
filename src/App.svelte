@@ -3,6 +3,7 @@
 	//import Square from './Square.svelte';
 	import { onMount } from "svelte";
 	import Game from './Game.svelte';
+	import Topbar from './Topbar.svelte';
 	import { gameBackground, gameLineColor, vw, vh } from './stores.js';
 
 	let win = '';
@@ -41,10 +42,11 @@
 	<html lang="fi" />
 </svelte:head>
 
-<div class="header">
+<!--div class="header">
 	<h1>Ristinolla</h1>
-</div>
+</div-->
   
+<Topbar />
 <main>
 	<div class="left" style="background: {color2+"55"}; color: {"black"}">
 		<fieldset>

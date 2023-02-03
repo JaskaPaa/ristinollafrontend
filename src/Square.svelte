@@ -52,6 +52,7 @@ let testValue = 2;
         /*text-align: center;*/
         border-radius: 0px; /* Why this's 2px in global.css ?? */
         line-height: 0;
+        cursor: pointer;
     }
 
     .anim {
