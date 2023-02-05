@@ -5709,17 +5709,17 @@ var app = (function () {
     			attr_dev(link1, "href", "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css");
     			add_location(link1, file$1, 18, 4, 380);
     			attr_dev(a0, "href", "#home");
-    			attr_dev(a0, "class", "active svelte-aa3383");
+    			attr_dev(a0, "class", "active svelte-1dlrvif");
     			add_location(a0, file$1, 22, 4, 589);
     			add_location(h1, file$1, 23, 7, 636);
-    			attr_dev(a1, "class", "svelte-aa3383");
+    			attr_dev(a1, "class", "svelte-1dlrvif");
     			add_location(a1, file$1, 23, 4, 633);
-    			attr_dev(a2, "class", "right svelte-aa3383");
+    			attr_dev(a2, "class", "right svelte-1dlrvif");
     			attr_dev(a2, "href", "#about");
     			add_location(a2, file$1, 24, 4, 664);
-    			attr_dev(a3, "class", "right svelte-aa3383");
+    			attr_dev(a3, "class", "right svelte-1dlrvif");
     			add_location(a3, file$1, 28, 4, 846);
-    			attr_dev(div, "class", "" + (null_to_empty(/*wideScreen*/ ctx[2] ? 'topnav' : 'topnav responsive') + " svelte-aa3383"));
+    			attr_dev(div, "class", "" + (null_to_empty(/*wideScreen*/ ctx[2] ? 'topnav' : 'topnav responsive') + " svelte-1dlrvif"));
     			attr_dev(div, "id", "myTopnav");
     			add_location(div, file$1, 21, 0, 510);
     		},

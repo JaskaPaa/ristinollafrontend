@@ -76,7 +76,7 @@ body {
 .topnav .right {
     float: right;
 }
-
+/*
 @media screen and (max-width: 600px) {
   .topnav a:not(:first-child) {display: none;}
   .topnav a.icon {
@@ -97,7 +97,7 @@ body {
     display: block;
     text-align: left;
   }
-}
+}*/
 </style>
 
 
