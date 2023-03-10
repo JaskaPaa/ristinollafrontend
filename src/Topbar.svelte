@@ -22,7 +22,7 @@
 <div class="{ wideScreen ? 'topnav' : 'topnav responsive'}" id="myTopnav">
     <a href="#home" class="active">Home</a>
     <a><h1>Ristinolla</h1></a>
-    <a class="right" href="#about">About</a>
+    <a class="right" href="about">About</a>
     <!--a href="javascript:void(0);" class="icon" on:click={() => wideScreen = !wideScreen}>
       <i class="fa fa-bars"></i>
     </a-->
